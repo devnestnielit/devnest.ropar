@@ -1,0 +1,156 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper functions ──────────────────────────────────────────────────
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Admin: a user that has the custom claim { admin: true } set via Firebase Admin SDK.
+    // Set it using:  npx ts-node scripts/setAdminClaim.ts <uid>
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.admin == true;
+    }
+
+    // Check whether the requesting user owns a member document by uid field
+    function isSelf(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+
+    // BUG-45: event-registration payload shape validation. Guest registration
+    // for Open events is a designed feature, so unauthenticated create stays
+    // allowed — but the payload is strictly whitelisted (no arbitrary fields
+    // or oversized values) to close the spam/junk-data abuse surface.
+    function isValidRegistration(data) {
+      return data.keys().hasOnly([
+          'type', 'mode', 'status', 'submittedByUid',
+          'name', 'college', 'branch', 'year', 'semester', 'regNumber',
+          'teamName', 'teamLeader', 'memberCount', 'members', 'eventTitle'
+        ])
+        && data.type in ['Solo', 'Team']
+        && data.status in ['pending', 'approved']
+        && data.eventTitle is string && data.eventTitle.size() <= 200
+        && (data.submittedByUid == null
+            || (data.submittedByUid is string && data.submittedByUid.size() <= 128))
+        && (!('mode' in data) || (data.mode is string && data.mode.size() <= 50))
+        && (!('name' in data) || (data.name is string && data.name.size() <= 100))
+        && (!('college' in data) || (data.college is string && data.college.size() <= 100))
+        && (!('branch' in data) || (data.branch is string && data.branch.size() <= 100))
+        && (!('year' in data) || (data.year is string && data.year.size() <= 20))
+        && (!('semester' in data) || (data.semester is string && data.semester.size() <= 20))
+        && (!('regNumber' in data) || (data.regNumber is string && data.regNumber.size() <= 50))
+        && (!('teamName' in data) || (data.teamName is string && data.teamName.size() <= 100))
+        && (!('teamLeader' in data) || (data.teamLeader is string && data.teamLeader.size() <= 100))
+        && (!('memberCount' in data)
+            || (data.memberCount is int && data.memberCount >= 1 && data.memberCount <= 10))
+        && (!('members' in data) || (data.members is list && data.members.size() <= 10));
+    }
+
+    // ── Events (/events) ─────────────────────────────────────────────────
+    // Public read; only admins can create/update/delete.
+    match /events/{eventId} {
+      allow read: if true;
+      allow write: if isAdmin();
+
+      // Subcollection: registrations (/events/{eventId}/registrations)
+      // BUG-45: create is public by design (guest registration for Open events)
+      // but the payload shape is validated — see isValidRegistration().
+      match /registrations/{regId} {
+        allow create: if isValidRegistration(request.resource.data);
+        allow read, update, delete: if isAdmin()
+          || (isAuthenticated() && resource.data.submittedByUid == request.auth.uid);
+      }
+    }
+
+    // ── Projects (/projects) ─────────────────────────────────────────────
+    // Public read.
+    // Any authenticated member can create (they attach submittedByUid).
+    // Admins can update/delete anything; a member can update/delete their own submission.
+    match /projects/{projectId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin()
+        || (isAuthenticated() && resource.data.submittedByUid == request.auth.uid);
+    }
+
+    // ── Blogs (/blogs) ────────────────────────────────────────────────────
+    // Public only sees approved blogs; admins see all (pending + approved).
+    // Submissions must start as pending unless created by an admin.
+    // Only admins can approve, update, or delete blogs.
+    match /blogs/{blogId} {
+      allow read: if resource.data.status == 'approved' || isAdmin();
+      allow create: if request.resource.data.status == 'pending' || isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    // ── Members (/members) ────────────────────────────────────────────────
+    // BUG-2 / BUG-14: No public read. Only admin or self (matching uid).
+    // BUG-1 / BUG-3: No passwords allowed in Firestore documents.
+    match /members/{memberId} {
+      allow read: if isAdmin()
+        || (isAuthenticated() && resource.data.uid == request.auth.uid);
+      allow create: if isAdmin() || (
+        request.resource.data.status == 'pending'
+        && !('password' in request.resource.data)
+      );
+      allow update: if isAdmin()
+        || (isAuthenticated() && resource.data.uid == request.auth.uid
+            // Members cannot escalate status, change UID, or add password field
+            && (!('status' in request.resource.data) || request.resource.data.status == resource.data.status)
+            && (!('uid' in request.resource.data) || request.resource.data.uid == resource.data.uid)
+            && !('password' in request.resource.data));
+      allow delete: if isAdmin();
+    }
+
+    // ── Member Profiles (/memberProfiles) ─────────────────────────────────
+    // Public-safe subset of /members, written by the approve-member API route.
+    // Public read; only admins or the owning member can update their own profile.
+    // Members cannot create or delete (done server-side via API route).
+    match /memberProfiles/{profileId} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+        || (isAuthenticated()
+            // Member must own the backing members doc (same doc ID)
+            && exists(/databases/$(database)/documents/members/$(profileId))
+            && get(/databases/$(database)/documents/members/$(profileId)).data.uid == request.auth.uid);
+    }
+
+    // ── Profile Update Requests (/profileUpdateRequests) ──────────────────
+    // Members submit profile change requests for admin approval.
+    // BUG-29: Read restricted to requester's own doc or admin (not world/all-auth readable).
+    match /profileUpdateRequests/{requestId} {
+      allow read: if isAdmin()
+        || (isAuthenticated() && resource.data.uid == request.auth.uid);
+      allow create: if isAuthenticated()
+        && request.resource.data.uid == request.auth.uid;
+      allow update: if isAdmin()
+        || (isAuthenticated() && resource.data.uid == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+
+    // ── Leaderboard (/leaderboard) ────────────────────────────────────────
+    // Public read; only admins write (maintained for backward compatibility).
+    match /leaderboard/{entryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── Contacts (/contacts) ─────────────────────────────────────────────
+    // Any visitor can create a contact message (with field validation).
+    // Only admins can read, update (mark-read), or delete.
+    match /contacts/{contactId} {
+      allow create: if request.resource.data.name is string
+                    && request.resource.data.email is string
+                    && request.resource.data.message is string;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // ── Fallback deny ─────────────────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
