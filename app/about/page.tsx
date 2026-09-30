@@ -139,7 +139,7 @@ export default function AboutPage() {
             </div>
             <div style={{ flex: 1, textAlign: 'center' }}>
               <h3 style={{ fontSize: '1.5rem', color: 'var(--text-primary)', marginBottom: '4px' }}>Naman Singla</h3>
-              <p style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: '1rem', fontSize: '0.9rem' }}>Club Lead &amp; Full Stack Architect</p>
+              <p style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: '1rem', fontSize: '0.9rem' }}>Coordinator</p>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
                 &quot;Building collaborative spaces where developers turn ambitious ideas into production-ready software.&quot;
               </p>
@@ -161,7 +161,7 @@ export default function AboutPage() {
             </div>
             <div style={{ flex: 1, textAlign: 'center' }}>
               <h3 style={{ fontSize: '1.5rem', color: 'var(--text-primary)', marginBottom: '4px' }}>Harsh Saini</h3>
-              <p style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: '1rem', fontSize: '0.9rem' }}>Competitive Programming Lead</p>
+              <p style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: '1rem', fontSize: '0.9rem' }}>Co-Coordinator</p>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
                 &quot;Sharpening algorithmic intuition, data structures, and competitive problem-solving skills.&quot;
               </p>
@@ -171,7 +171,7 @@ export default function AboutPage() {
           <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ background: 'var(--bg-card)', borderRadius: '24px', padding: '2rem', border: '1px solid var(--border)', display: 'flex', gap: '2rem', alignItems: 'center', flexWrap: 'wrap' }}>
             <div style={{ width: '150px', height: '150px', borderRadius: '50%', background: 'var(--border-light)', overflow: 'hidden', flexShrink: 0, margin: '0 auto' }}>
               <img
-                src="/team/harsh-saini.jpg"
+                src="/team/sheray.jpeg"
                 alt="Harsh Saini - Competitive Programming Lead"
                 width={150}
                 height={150}
@@ -182,8 +182,8 @@ export default function AboutPage() {
               />
             </div>
             <div style={{ flex: 1, textAlign: 'center' }}>
-              <h3 style={{ fontSize: '1.5rem', color: 'var(--text-primary)', marginBottom: '4px' }}>Harsh Saini</h3>
-              <p style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: '1rem', fontSize: '0.9rem' }}>Competitive Programming Lead</p>
+              <h3 style={{ fontSize: '1.5rem', color: 'var(--text-primary)', marginBottom: '4px' }}>Sheray Vatsya</h3>
+              <p style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: '1rem', fontSize: '0.9rem' }}>Co-Coordinator</p>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
                 &quot;Exploring technology, sharpening skills, and building impactful solutions.&quot;
               </p>
@@ -199,9 +199,6 @@ export default function AboutPage() {
                 height={150}
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 onError={(e) => {
-                  // BUG-4: prefer the self-hosted photo; fall back to the (expiring)
-                  // LinkedIn CDN URL until the local file is added, then to the avatar.
-                  // Owner: save Sohit's photo as public/team/sohit-narayan.jpg.
                   const img = e.target as HTMLImageElement;
                   if (!img.dataset.fbk) {
                     img.dataset.fbk = '1';
@@ -214,7 +211,7 @@ export default function AboutPage() {
             </div>
             <div style={{ flex: 1, textAlign: 'center' }}>
               <h3 style={{ fontSize: '1.5rem', color: 'var(--text-primary)', marginBottom: '4px' }}>Sohit Narayan</h3>
-              <p style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: '1rem', fontSize: '0.9rem' }}>Technical Lead &amp; Systems Architect</p>
+              <p style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: '1rem', fontSize: '0.9rem' }}>Social Media Executive</p>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
                 &quot;Empowering student developers to master modern frameworks, scalable systems.&quot;
               </p>
