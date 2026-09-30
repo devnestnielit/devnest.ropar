@@ -37,7 +37,7 @@ export default function AboutPage() {
           <div style={{ position: 'absolute', top: -50, right: -50, fontSize: '15rem', color: 'var(--accent-glow)', opacity: 0.1 }}><FaCode /></div>
           <h2 style={{ fontSize: '2rem', marginBottom: '1.5rem', color: 'var(--text-primary)' }}>Mission Statement</h2>
           <p style={{ color: 'var(--text-primary)', fontSize: '1.2rem', fontStyle: 'italic', position: 'relative', zIndex: 1 }}>
-            "To democratize technology education on campus by providing students with the environment, mentorship, and resources needed to transform them from consumers of technology into creators of it."
+            To democratize technology education on campus by providing students with the environment, mentorship, and resources needed to transform them from consumers of technology into creators of it.
           </p>
 
           <div style={{ marginTop: '2rem', display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem', background: 'var(--bg-primary)', borderRadius: '12px', border: '1px solid var(--border-light)' }}>
