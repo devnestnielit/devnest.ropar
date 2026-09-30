@@ -149,59 +149,6 @@ export default function AboutPage() {
           <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ background: 'var(--bg-card)', borderRadius: '24px', padding: '2rem', border: '1px solid var(--border)', display: 'flex', gap: '2rem', alignItems: 'center', flexWrap: 'wrap' }}>
             <div style={{ width: '150px', height: '150px', borderRadius: '50%', background: 'var(--border-light)', overflow: 'hidden', flexShrink: 0, margin: '0 auto' }}>
               <img
-                src="/team/sohit-narayan.jpg"
-                alt="Sohit Narayan - Technical Lead & Systems Architect"
-                width={150}
-                height={150}
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                onError={(e) => {
-                  // BUG-4: prefer the self-hosted photo; fall back to the (expiring)
-                  // LinkedIn CDN URL until the local file is added, then to the avatar.
-                  // Owner: save Sohit's photo as public/team/sohit-narayan.jpg.
-                  const img = e.target as HTMLImageElement;
-                  if (!img.dataset.fbk) {
-                    img.dataset.fbk = '1';
-                    img.src = 'https://media.licdn.com/dms/image/v2/D4D03AQGh1HFWcG6BRQ/profile-displayphoto-crop_800_800/B4DZ9ZslHwIIAM-/0/1783916287207?e=1791417600&v=beta&t=8eeXjId39uhUX96lNysFJB7rUMuT9Ed0H9fkR4u3_t0';
-                  } else {
-                    img.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 100 100"><rect fill="%231e293b" width="100" height="100"/><text fill="%2394a3b8" x="50" y="50" font-family="sans-serif" font-size="40" text-anchor="middle" alignment-baseline="middle">👨‍💻</text></svg>';
-                  }
-                }}
-              />
-            </div>
-            <div style={{ flex: 1, textAlign: 'center' }}>
-              <h3 style={{ fontSize: '1.5rem', color: 'var(--text-primary)', marginBottom: '4px' }}>Sohit Narayan</h3>
-              <p style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: '1rem', fontSize: '0.9rem' }}>Technical Lead &amp; Systems Architect</p>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
-                &quot;Empowering student developers to master modern frameworks, scalable systems, and cloud engineering.&quot;
-              </p>
-            </div>
-          </motion.div>
-
-          <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ background: 'var(--bg-card)', borderRadius: '24px', padding: '2rem', border: '1px solid var(--border)', display: 'flex', gap: '2rem', alignItems: 'center', flexWrap: 'wrap' }}>
-            <div style={{ width: '150px', height: '150px', borderRadius: '50%', background: 'var(--border-light)', overflow: 'hidden', flexShrink: 0, margin: '0 auto' }}>
-              <img
-                src="/team/nikhil-gupta.jpg"
-                alt="Nikhil Gupta - Frontend Lead &amp; UI/UX Specialist"
-                width={150}
-                height={150}
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 100 100"><rect fill="%231e293b" width="100" height="100"/><text fill="%2394a3b8" x="50" y="50" font-family="sans-serif" font-size="40" text-anchor="middle" alignment-baseline="middle">👨‍💻</text></svg>';
-                }}
-              />
-            </div>
-            <div style={{ flex: 1, textAlign: 'center' }}>
-              <h3 style={{ fontSize: '1.5rem', color: 'var(--text-primary)', marginBottom: '4px' }}>Nikhil Gupta</h3>
-              <p style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: '1rem', fontSize: '0.9rem' }}>Frontend Lead &amp; UI/UX Specialist</p>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
-                &quot;Designing fluid, intuitive, and accessible interfaces that bring interactive club projects to life.&quot;
-              </p>
-            </div>
-          </motion.div>
-
-          <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ background: 'var(--bg-card)', borderRadius: '24px', padding: '2rem', border: '1px solid var(--border)', display: 'flex', gap: '2rem', alignItems: 'center', flexWrap: 'wrap' }}>
-            <div style={{ width: '150px', height: '150px', borderRadius: '50%', background: 'var(--border-light)', overflow: 'hidden', flexShrink: 0, margin: '0 auto' }}>
-              <img
                 src="/team/harsh-saini.jpg"
                 alt="Harsh Saini - Competitive Programming Lead"
                 width={150}
@@ -224,8 +171,8 @@ export default function AboutPage() {
           <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ background: 'var(--bg-card)', borderRadius: '24px', padding: '2rem', border: '1px solid var(--border)', display: 'flex', gap: '2rem', alignItems: 'center', flexWrap: 'wrap' }}>
             <div style={{ width: '150px', height: '150px', borderRadius: '50%', background: 'var(--border-light)', overflow: 'hidden', flexShrink: 0, margin: '0 auto' }}>
               <img
-                src="/team/arghadeep-das.jpg"
-                alt="Arghadeep Das - Open Source &amp; Community Coordinator"
+                src="/team/harsh-saini.jpg"
+                alt="Harsh Saini - Competitive Programming Lead"
                 width={150}
                 height={150}
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
@@ -235,10 +182,41 @@ export default function AboutPage() {
               />
             </div>
             <div style={{ flex: 1, textAlign: 'center' }}>
-              <h3 style={{ fontSize: '1.3rem', color: 'var(--text-primary)', marginBottom: '4px' }}>Arghadeep Das</h3>
-              <p style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: '1rem', fontSize: '0.9rem' }}>Open Source &amp; Community Coordinator</p>
+              <h3 style={{ fontSize: '1.5rem', color: 'var(--text-primary)', marginBottom: '4px' }}>Harsh Saini</h3>
+              <p style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: '1rem', fontSize: '0.9rem' }}>Competitive Programming Lead</p>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
-                &quot;Fostering welcoming open-source initiatives, community workshops, and cross-team hackathons.&quot;
+                &quot;Exploring technology, sharpening skills, and building impactful solutions.&quot;
+              </p>
+            </div>
+          </motion.div>
+
+          <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ background: 'var(--bg-card)', borderRadius: '24px', padding: '2rem', border: '1px solid var(--border)', display: 'flex', gap: '2rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ width: '150px', height: '150px', borderRadius: '50%', background: 'var(--border-light)', overflow: 'hidden', flexShrink: 0, margin: '0 auto' }}>
+              <img
+                src="/team/sohitnarayan.jpg"
+                alt="Sohit Narayan - Technical Lead & Systems Architect"
+                width={150}
+                height={150}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                onError={(e) => {
+                  // BUG-4: prefer the self-hosted photo; fall back to the (expiring)
+                  // LinkedIn CDN URL until the local file is added, then to the avatar.
+                  // Owner: save Sohit's photo as public/team/sohit-narayan.jpg.
+                  const img = e.target as HTMLImageElement;
+                  if (!img.dataset.fbk) {
+                    img.dataset.fbk = '1';
+                    img.src = 'https://media.licdn.com/dms/image/v2/D4D03AQGh1HFWcG6BRQ/profile-displayphoto-crop_800_800/B4DZ9ZslHwIIAM-/0/1783916287207?e=1791417600&v=beta&t=8eeXjId39uhUX96lNysFJB7rUMuT9Ed0H9fkR4u3_t0';
+                  } else {
+                    img.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 100 100"><rect fill="%231e293b" width="100" height="100"/><text fill="%2394a3b8" x="50" y="50" font-family="sans-serif" font-size="40" text-anchor="middle" alignment-baseline="middle">👨‍💻</text></svg>';
+                  }
+                }}
+              />
+            </div>
+            <div style={{ flex: 1, textAlign: 'center' }}>
+              <h3 style={{ fontSize: '1.5rem', color: 'var(--text-primary)', marginBottom: '4px' }}>Sohit Narayan</h3>
+              <p style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: '1rem', fontSize: '0.9rem' }}>Technical Lead &amp; Systems Architect</p>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
+                &quot;Empowering student developers to master modern frameworks, scalable systems.&quot;
               </p>
             </div>
           </motion.div>
