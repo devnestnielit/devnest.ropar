@@ -239,7 +239,7 @@ export default function AboutPage() {
             </div>
             <div style={{ flex: 1, textAlign: 'center' }}>
               <h3 style={{ fontSize: '1.5rem', color: 'var(--text-primary)', marginBottom: '4px' }}>Prakhar Mishra</h3>
-              <p style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: '1rem', fontSize: '0.9rem' }}>Former Club Lead</p>
+              <p style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: '1rem', fontSize: '0.9rem' }}>Coordinator</p>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
                 &quot;Pioneered DevNest foundational initiatives, establishing early peer workshops and technical meetups.&quot;
               </p>
@@ -261,7 +261,7 @@ export default function AboutPage() {
             </div>
             <div style={{ flex: 1, textAlign: 'center' }}>
               <h3 style={{ fontSize: '1.5rem', color: 'var(--text-primary)', marginBottom: '4px' }}>Aditya Singh</h3>
-              <p style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: '1rem', fontSize: '0.9rem' }}>Former Technical Lead</p>
+              <p style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: '1rem', fontSize: '0.9rem' }}>Co-Coordinator</p>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
                 &quot;Mentored students in backend architecture, database fundamentals, and scalable development.&quot;
               </p>
@@ -271,7 +271,29 @@ export default function AboutPage() {
           <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ background: 'var(--bg-card)', borderRadius: '24px', padding: '2rem', border: '1px solid var(--border)', display: 'flex', gap: '2rem', alignItems: 'center', flexWrap: 'wrap' }}>
             <div style={{ width: '150px', height: '150px', borderRadius: '50%', background: 'var(--border-light)', overflow: 'hidden', flexShrink: 0, margin: '0 auto' }}>
               <img
-                src="/team/kartik-vats.jpg"
+                src="/team/dheeraj-aggarwal.jpeg"
+                alt="Aditya Singh - Former Technical Lead"
+                width={150}
+                height={150}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 100 100"><rect fill="%231e293b" width="100" height="100"/><text fill="%2394a3b8" x="50" y="50" font-family="sans-serif" font-size="40" text-anchor="middle" alignment-baseline="middle">👨‍💻</text></svg>';
+                }}
+              />
+            </div>
+            <div style={{ flex: 1, textAlign: 'center' }}>
+              <h3 style={{ fontSize: '1.5rem', color: 'var(--text-primary)', marginBottom: '4px' }}>Dheeraj Aggarwal</h3>
+              <p style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: '1rem', fontSize: '0.9rem' }}>Co-Coordinator</p>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
+                &quot;Assisted students with backend engineering, data management, and scalable solutions.&quot;
+              </p>
+            </div>
+          </motion.div>
+
+          <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} style={{ background: 'var(--bg-card)', borderRadius: '24px', padding: '2rem', border: '1px solid var(--border)', display: 'flex', gap: '2rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ width: '150px', height: '150px', borderRadius: '50%', background: 'var(--border-light)', overflow: 'hidden', flexShrink: 0, margin: '0 auto' }}>
+              <img
+                src="/team/kartik-kumar.png"
                 alt="Kartik Vats - Former Operations Lead"
                 width={150}
                 height={150}
@@ -282,8 +304,8 @@ export default function AboutPage() {
               />
             </div>
             <div style={{ flex: 1, textAlign: 'center' }}>
-              <h3 style={{ fontSize: '1.5rem', color: 'var(--text-primary)', marginBottom: '4px' }}>Kartik Vats</h3>
-              <p style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: '1rem', fontSize: '0.9rem' }}>Former Operations Lead</p>
+              <h3 style={{ fontSize: '1.5rem', color: 'var(--text-primary)', marginBottom: '4px' }}>Kartik Kumar</h3>
+              <p style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: '1rem', fontSize: '0.9rem' }}>Social Media Executive</p>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
                 &quot;Guided student hackathon teams from initial brainstorming to polished presentation demos.&quot;
               </p>
