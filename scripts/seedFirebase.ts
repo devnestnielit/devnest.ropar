@@ -21,7 +21,7 @@ export const seedDatabase = async () => {
     console.log('Seeding Projects...');
     const projectsRef = collection(db, 'projects');
     for (const project of sampleProjects) {
-      await setDoc(doc(projectsRef, project.id), project);
+      await setDoc(doc(projectsRef, project.id), { ...project, status: project.status || 'approved' });
       console.log(`Added project: ${project.title}`);
     }
 

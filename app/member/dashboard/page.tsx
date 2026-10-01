@@ -768,65 +768,101 @@ export default function MemberDashboardPage() {
             </motion.section>
 
             {/* My Projects */}
-            <motion.section
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              style={{ background: 'var(--bg-card)', borderRadius: 20, border: '1px solid var(--border)', overflow: 'hidden' }}
-            >
-              <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <FaProjectDiagram style={{ color: 'var(--info)', fontSize: '1rem' }} />
-                  <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: '1rem' }}>My Projects</span>
-                </div>
-                <Link href="/projects" style={{ fontSize: '0.8rem', color: 'var(--accent)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-                  Submit new <FaExternalLinkAlt size={10} />
-                </Link>
-              </div>
+            {(() => {
+              const verifiedProjects = myProjects.filter(p => p.status === 'approved' || (!p.status && !p.submittedByUid));
+              const pendingProjects = myProjects.filter(p => p.status === 'pending');
 
-              {myProjects.length === 0 ? (
-                <div style={{ padding: '40px 24px', textAlign: 'center' }}>
-                  <FaProjectDiagram style={{ fontSize: '2.5rem', color: 'var(--border-light)', marginBottom: 12 }} />
-                  <p style={{ color: 'var(--text-muted)', marginBottom: 16 }}>You haven't submitted any projects yet.</p>
-                  <Link href="/projects" className="btn-primary" style={{ padding: '10px 24px', fontSize: '0.85rem' }}>
-                    Submit Your First Project
-                  </Link>
-                </div>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1px', background: 'var(--border)' }}>
-                  {myProjects.map((proj) => (
-                    <div key={proj.id} style={{ background: 'var(--bg-card)', padding: '20px', transition: 'background 0.2s' }}>
-                      <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, fontSize: '0.95rem' }}>
-                        {proj.title}
-                      </div>
-                      <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: 12, lineHeight: 1.5,
-                        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                        {proj.description}
-                      </p>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-                        {(proj.techStack || []).slice(0, 3).map((t: string) => (
-                          <span key={t} className="badge badge-blue" style={{ fontSize: '0.65rem' }}>{t}</span>
-                        ))}
-                      </div>
-                      <div style={{ display: 'flex', gap: 12 }}>
-                        {proj.githubLink && (
-                          <a href={proj.githubLink} target="_blank" rel="noopener noreferrer"
-                            style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-muted)', fontSize: '0.8rem', transition: 'color 0.2s' }}>
-                            <FaGithub /> GitHub
-                          </a>
-                        )}
-                        {proj.liveLink && (
-                          <a href={proj.liveLink} target="_blank" rel="noopener noreferrer"
-                            style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--accent)', fontSize: '0.8rem', transition: 'opacity 0.2s' }}>
-                            <FaLink /> Live
-                          </a>
-                        )}
-                      </div>
+              return (
+                <motion.section
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  style={{ background: 'var(--bg-card)', borderRadius: 20, border: '1px solid var(--border)', overflow: 'hidden' }}
+                >
+                  <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <FaProjectDiagram style={{ color: 'var(--info)', fontSize: '1rem' }} />
+                      <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: '1rem' }}>
+                        My Verified Projects {verifiedProjects.length > 0 && `(${verifiedProjects.length})`}
+                      </span>
                     </div>
-                  ))}
-                </div>
-              )}
-            </motion.section>
+                    <Link href="/projects" style={{ fontSize: '0.8rem', color: 'var(--accent)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      Submit new <FaExternalLinkAlt size={10} />
+                    </Link>
+                  </div>
+
+                  {pendingProjects.length > 0 && (
+                    <div style={{
+                      padding: '12px 20px',
+                      background: 'rgba(250, 204, 21, 0.08)',
+                      borderBottom: '1px solid rgba(250, 204, 21, 0.2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 12,
+                      fontSize: '0.82rem',
+                      color: '#facc15'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <FaHourglassHalf />
+                        <span>
+                          <strong>{pendingProjects.length} {pendingProjects.length === 1 ? 'project' : 'projects'} under review:</strong> &ldquo;{pendingProjects.map(p => p.title).join(', ')}&rdquo; — will be visible here and on the public Projects page once verified by an Admin.
+                        </span>
+                      </div>
+                      <span className="badge badge-yellow" style={{ fontSize: '0.7rem', flexShrink: 0 }}>Pending Admin Verification</span>
+                    </div>
+                  )}
+
+                  {verifiedProjects.length === 0 ? (
+                    <div style={{ padding: '40px 24px', textAlign: 'center' }}>
+                      <FaProjectDiagram style={{ fontSize: '2.5rem', color: 'var(--border-light)', marginBottom: 12 }} />
+                      <p style={{ color: 'var(--text-muted)', marginBottom: 16 }}>
+                        {pendingProjects.length > 0
+                          ? 'Your submitted projects are currently awaiting admin verification.'
+                          : "You haven't submitted any projects yet."}
+                      </p>
+                      <Link href="/projects" className="btn-primary" style={{ padding: '10px 24px', fontSize: '0.85rem' }}>
+                        {pendingProjects.length > 0 ? 'Submit Another Project' : 'Submit Your First Project'}
+                      </Link>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1px', background: 'var(--border)' }}>
+                      {verifiedProjects.map((proj) => (
+                        <div key={proj.id} style={{ background: 'var(--bg-card)', padding: '20px', transition: 'background 0.2s' }}>
+                          <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, fontSize: '0.95rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <span>{proj.title}</span>
+                            <span className="badge badge-green" style={{ fontSize: '0.65rem' }}>Verified</span>
+                          </div>
+                          <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: 12, lineHeight: 1.5,
+                            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                            {proj.description}
+                          </p>
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+                            {(proj.techStack || []).slice(0, 3).map((t: string) => (
+                              <span key={t} className="badge badge-blue" style={{ fontSize: '0.65rem' }}>{t}</span>
+                            ))}
+                          </div>
+                          <div style={{ display: 'flex', gap: 12 }}>
+                            {proj.githubLink && (
+                              <a href={proj.githubLink} target="_blank" rel="noopener noreferrer"
+                                style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-muted)', fontSize: '0.8rem', transition: 'color 0.2s' }}>
+                                <FaGithub /> GitHub
+                              </a>
+                            )}
+                            {proj.liveLink && (
+                              <a href={proj.liveLink} target="_blank" rel="noopener noreferrer"
+                                style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--accent)', fontSize: '0.8rem', transition: 'opacity 0.2s' }}>
+                                <FaLink /> Live
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </motion.section>
+              );
+            })()}
 
             {/* Leaderboard snippet */}
             {leaderboard.length > 0 && (

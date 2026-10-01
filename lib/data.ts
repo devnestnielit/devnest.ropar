@@ -96,6 +96,7 @@ export const sampleProjects = [
     liveLink: 'https://campusnav.devnest.tech',
     contributors: ['Aryan Sharma', 'Priya Nair', 'Rahul Mehta'],
     image: '/projects/campusnav.jpg',
+    status: 'approved',
   },
   {
     id: 'proj-2',
@@ -106,6 +107,7 @@ export const sampleProjects = [
     liveLink: 'https://codesync.devnest.tech',
     contributors: ['Rahul Mehta', 'Karan Singh', 'Sneha Kapoor'],
     image: '/projects/codesync.jpg',
+    status: 'approved',
   },
   {
     id: 'proj-3',
@@ -116,6 +118,7 @@ export const sampleProjects = [
     liveLink: 'https://agrisense.devnest.tech',
     contributors: ['Priya Nair', 'Aryan Sharma'],
     image: '/projects/agrisense.jpg',
+    status: 'approved',
   },
   {
     id: 'proj-4',
@@ -126,6 +129,7 @@ export const sampleProjects = [
     liveLink: 'https://studybuddy.devnest.tech',
     contributors: ['Sneha Kapoor', 'Karan Singh'],
     image: '/projects/studybuddy.jpg',
+    status: 'approved',
   },
 ];
 

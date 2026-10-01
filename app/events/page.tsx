@@ -744,7 +744,7 @@ export default function EventsPage() {
                       value={soloForm.semester}
                       onChange={(e) => setSoloForm({ ...soloForm, semester: e.target.value })}
                     >
-                      {['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'].map(s => (
+                      {['1st', '2nd'].map(s => (
                         <option key={s} value={s}>{s} Sem</option>
                       ))}
                     </select>

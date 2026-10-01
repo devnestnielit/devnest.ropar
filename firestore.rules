@@ -80,13 +80,19 @@ service cloud.firestore {
     }
 
     // ── Projects (/projects) ─────────────────────────────────────────────
-    // Public read.
-    // Any authenticated member can create (they attach submittedByUid).
-    // Admins can update/delete anything; a member can update/delete their own submission.
+    // Public read: any visitor can read projects (the app displays approved ones).
+    // Any authenticated member can create, but submissions must start with status == 'pending' (unless admin).
+    // Admins can approve/update/delete any project.
+    // Members can update/delete their own submission, but cannot self-approve (cannot change status).
     match /projects/{projectId} {
       allow read: if true;
-      allow create: if isAuthenticated();
-      allow update, delete: if isAdmin()
+      allow create: if isAuthenticated() && (
+        request.resource.data.status == 'pending' || isAdmin()
+      );
+      allow update: if isAdmin()
+        || (isAuthenticated() && resource.data.submittedByUid == request.auth.uid
+            && (!('status' in request.resource.data) || request.resource.data.status == resource.data.status));
+      allow delete: if isAdmin()
         || (isAuthenticated() && resource.data.submittedByUid == request.auth.uid);
     }
 

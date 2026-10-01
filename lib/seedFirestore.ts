@@ -16,7 +16,7 @@ export const seedFirestore = async () => {
     // 2. Seed Projects
     const projectsCol = collection(db, 'projects');
     for (const project of sampleProjects) {
-      await addDoc(projectsCol, project);
+      await addDoc(projectsCol, { ...project, status: project.status || 'approved' });
     }
     console.log('Projects seeded.');
 

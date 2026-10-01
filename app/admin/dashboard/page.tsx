@@ -30,6 +30,9 @@ export default function AdminDashboardPage() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string; collectionName: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Project status filter state
+  const [projectStatusFilter, setProjectStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+
   // Event Registrations & Scoring State
   const [eventRegCounts, setEventRegCounts] = useState<Record<string, number>>({});
   const [selectedEventForRegs, setSelectedEventForRegs] = useState<any | null>(null);
@@ -222,6 +225,44 @@ export default function AdminDashboardPage() {
     } catch (err: any) {
       console.error('Approve blog error:', err);
       toast.error(`Failed to approve article: ${err?.message || 'Permission denied'}`);
+    }
+  };
+
+  // Approve a pending project
+  const handleApproveProject = async (projectId: string) => {
+    if (!window.confirm('Approve this project? It will become visible on the public Projects page and in the member\'s dashboard.')) return;
+
+    try {
+      await auth.currentUser?.getIdToken(true);
+      await updateDoc(doc(db, 'projects', projectId), {
+        status: 'approved',
+        verifiedAt: new Date().toISOString(),
+        verifiedBy: user?.email || 'admin',
+        updatedAt: new Date().toISOString()
+      });
+      toast.success('Project approved! It is now publicly visible and in the member\'s dashboard.');
+      fetchData('projects');
+    } catch (err: any) {
+      console.error('Approve project error:', err);
+      toast.error(`Failed to approve project: ${err?.message || 'Permission denied'}`);
+    }
+  };
+
+  // Reject a project submission
+  const handleRejectProject = async (projectId: string) => {
+    if (!window.confirm('Reject this project submission?')) return;
+
+    try {
+      await auth.currentUser?.getIdToken(true);
+      await updateDoc(doc(db, 'projects', projectId), {
+        status: 'rejected',
+        updatedAt: new Date().toISOString()
+      });
+      toast.success('Project marked as rejected.');
+      fetchData('projects');
+    } catch (err: any) {
+      console.error('Reject project error:', err);
+      toast.error(`Failed to reject project: ${err?.message || 'Permission denied'}`);
     }
   };
 
@@ -500,7 +541,7 @@ export default function AdminDashboardPage() {
         status: 'upcoming'
       });
     } else if (activeTab === 'projects') {
-      setFormData({ title: '', description: '', techStack: '', githubLink: '', liveLink: '', image: '', contributors: '' });
+      setFormData({ title: '', description: '', techStack: '', githubLink: '', liveLink: '', image: '', contributors: '', status: 'approved' });
     } else if (activeTab === 'blogs') {
       setFormData({ title: '', author: '', date: new Date().toISOString().split('T')[0], tags: '', readTime: '', thumbnail: '', excerpt: '', content: '', slug: '', status: 'approved' });
     } else if (activeTab === 'members') {
@@ -532,7 +573,8 @@ export default function AdminDashboardPage() {
         githubLink: item.githubLink || '',
         liveLink: item.liveLink || '',
         image: item.image || '',
-        contributors: Array.isArray(item.contributors) ? item.contributors.join(', ') : item.contributors || ''
+        contributors: Array.isArray(item.contributors) ? item.contributors.join(', ') : item.contributors || '',
+        status: item.status || 'pending'
       });
     } else if (activeTab === 'blogs') {
       setFormData({
@@ -579,6 +621,7 @@ export default function AdminDashboardPage() {
       if (activeTab === 'projects') {
         submitData.techStack = typeof formData.techStack === 'string' ? formData.techStack.split(',').map((s: string) => s.trim()).filter(Boolean) : formData.techStack;
         submitData.contributors = typeof formData.contributors === 'string' ? formData.contributors.split(',').map((s: string) => s.trim()).filter(Boolean) : formData.contributors;
+        submitData.status = formData.status || 'approved';
       } else if (activeTab === 'blogs') {
         submitData.tags = typeof formData.tags === 'string' ? formData.tags.split(',').map((s: string) => s.trim()).filter(Boolean) : formData.tags;
         if (!submitData.slug) {
@@ -692,89 +735,149 @@ export default function AdminDashboardPage() {
           )}
         </div>
 
-        <div style={{ background: 'var(--bg-card)', borderRadius: '16px', border: '1px solid var(--border)', overflow: 'hidden' }}>
-          {dataLoading ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading...</div>
-          ) : data.length > 0 ? (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '700px' }}>
-                <thead>
-                  <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', textTransform: 'uppercase', fontSize: '0.85rem' }}>
-                    <th style={{ padding: '16px 24px' }}>Title / Name</th>
-                    {activeTab === 'events' && <th style={{ padding: '16px 24px' }}>Date</th>}
-                    {activeTab === 'events' && <th style={{ padding: '16px 24px' }}>Type</th>}
-                    {activeTab === 'events' && <th style={{ padding: '16px 24px' }}>Mode</th>}
-                    {activeTab === 'events' && <th style={{ padding: '16px 24px' }}>Status</th>}
-                    {activeTab === 'events' && <th style={{ padding: '16px 24px' }}>Registrations</th>}
-                    {(activeTab === 'projects' || activeTab === 'blogs') && <th style={{ padding: '16px 24px' }}>Description/Excerpt</th>}
-                    {activeTab === 'blogs' && <th style={{ padding: '16px 24px' }}>Status</th>}
-                    {activeTab === 'members' && <th style={{ padding: '16px 24px' }}>Reg No</th>}
-                    {activeTab === 'members' && <th style={{ padding: '16px 24px' }}>Email</th>}
-                    {activeTab === 'members' && <th style={{ padding: '16px 24px' }}>Status</th>}
-                    {activeTab === 'profileUpdateRequests' && <th style={{ padding: '16px 24px' }}>Reg No</th>}
-                    {activeTab === 'profileUpdateRequests' && <th style={{ padding: '16px 24px' }}>Requested Changes</th>}
-                    {activeTab === 'profileUpdateRequests' && <th style={{ padding: '16px 24px' }}>Submitted</th>}
-                    {activeTab === 'leaderboard' && <th style={{ padding: '16px 24px' }}>Reg No</th>}
-                    {activeTab === 'leaderboard' && <th style={{ padding: '16px 24px' }}>Month Points</th>}
-                    {activeTab === 'leaderboard' && <th style={{ padding: '16px 24px' }}>Total Points</th>}
-                    {activeTab === 'contacts' && <th style={{ padding: '16px 24px' }}>Email</th>}
-                    {activeTab === 'contacts' && <th style={{ padding: '16px 24px' }}>Message</th>}
-                    {activeTab === 'contacts' && <th style={{ padding: '16px 24px' }}>Read</th>}
-                    {activeTab !== 'leaderboard' && <th style={{ padding: '16px 24px', textAlign: 'right' }}>Actions</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.map((item) => (
-                    <tr key={item.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
-                      <td style={{ padding: '16px 24px', fontWeight: 500 }}>
-                        {item.title || item.name || item.memberName || item.subject || 'Unknown'}
-                        {activeTab === 'profileUpdateRequests' && item.memberEmail && (
-                          <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 400 }}>{item.memberEmail}</div>
-                        )}
-                      </td>
-                      {activeTab === 'events' && <td style={{ padding: '16px 24px', color: 'var(--text-muted)' }}>{item.date}</td>}
-                      {activeTab === 'events' && <td style={{ padding: '16px 24px' }}><span className="badge badge-green">{item.type || 'Solo'}</span></td>}
-                      {activeTab === 'events' && <td style={{ padding: '16px 24px' }}><span className="badge badge-yellow">{item.mode || 'Intra-College'}</span></td>}
-                      {activeTab === 'events' && (
-                        <td style={{ padding: '16px 24px' }}>
-                          <span className={item.status === 'live' || item.status === 'ongoing' ? 'badge badge-accent' : item.status === 'completed' || item.status === 'past' ? 'badge badge-muted' : 'badge badge-blue'}>
-                            {item.status === 'live' || item.status === 'ongoing' ? '🔴 Live' : item.status === 'completed' || item.status === 'past' ? 'Completed' : 'Upcoming'}
-                          </span>
-                        </td>
-                      )}
-                      {activeTab === 'events' && (
-                        <td style={{ padding: '16px 24px' }}>
-                          <button
-                            onClick={() => handleOpenRegistrationsModal(item)}
-                            style={{
-                              background: 'var(--accent-glow)',
-                              border: '1px solid var(--accent)',
-                              color: 'var(--accent)',
-                              padding: '6px 12px',
-                              borderRadius: '8px',
-                              cursor: 'pointer',
-                              fontWeight: 600,
-                              fontSize: '0.85rem',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '6px'
-                            }}
-                          >
-                            <FaUsers /> {eventRegCounts[item.id] ?? 0} {item.type === 'Team' ? 'Teams' : 'Registered'}
-                          </button>
-                        </td>
-                      )}
-                      {(activeTab === 'projects' || activeTab === 'blogs') && <td style={{ padding: '16px 24px', color: 'var(--text-muted)', maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.description || item.excerpt}</td>}
-                      {activeTab === 'blogs' && <td style={{ padding: '16px 24px' }}><span className={item.status === 'approved' ? 'badge badge-green' : 'badge badge-yellow'}>{item.status || 'pending'}</span></td>}
-                      {activeTab === 'members' && (
-                        <td style={{ padding: '16px 24px' }}>
-                          <span style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--accent)', background: 'var(--bg-secondary)', padding: '4px 8px', borderRadius: '6px', fontSize: '0.85rem' }}>
-                            {item.registrationNumber || '—'}
-                          </span>
-                        </td>
-                      )}
-                      {activeTab === 'members' && <td style={{ padding: '16px 24px', color: 'var(--text-muted)' }}>{item.email}</td>}
-                      {activeTab === 'members' && <td style={{ padding: '16px 24px' }}><span className={item.status === 'approved' ? 'badge badge-green' : 'badge badge-yellow'}>{item.status || 'pending'}</span></td>}
+        {activeTab === 'projects' && (
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
+            {(['all', 'pending', 'approved', 'rejected'] as const).map((st) => {
+              const count = st === 'all'
+                ? data.length
+                : data.filter((d: any) => (d.status || 'pending') === st).length;
+              return (
+                <button
+                  key={st}
+                  onClick={() => setProjectStatusFilter(st)}
+                  style={{
+                    padding: '8px 18px',
+                    borderRadius: '20px',
+                    border: projectStatusFilter === st ? '1px solid var(--accent)' : '1px solid var(--border)',
+                    background: projectStatusFilter === st ? 'var(--accent-glow)' : 'var(--bg-card)',
+                    color: projectStatusFilter === st ? 'var(--accent)' : 'var(--text-muted)',
+                    cursor: 'pointer',
+                    fontSize: '0.85rem',
+                    fontWeight: projectStatusFilter === st ? 700 : 500,
+                    textTransform: 'capitalize',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  {st === 'pending' ? '⏳ Pending Verification' : st === 'approved' ? '✓ Approved' : st === 'rejected' ? '✕ Rejected' : 'All'}
+                  <span style={{
+                    background: projectStatusFilter === st ? 'var(--accent)' : 'var(--border)',
+                    color: projectStatusFilter === st ? '#000' : 'var(--text-dim)',
+                    padding: '1px 7px',
+                    borderRadius: '10px',
+                    fontSize: '0.72rem',
+                    fontWeight: 700
+                  }}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {(() => {
+          const displayedData = activeTab === 'projects' && projectStatusFilter !== 'all'
+            ? data.filter((d: any) => (d.status || 'pending') === projectStatusFilter)
+            : data;
+
+          return (
+            <div style={{ background: 'var(--bg-card)', borderRadius: '16px', border: '1px solid var(--border)', overflow: 'hidden' }}>
+              {dataLoading ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading...</div>
+              ) : displayedData.length > 0 ? (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '700px' }}>
+                    <thead>
+                      <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', textTransform: 'uppercase', fontSize: '0.85rem' }}>
+                        <th style={{ padding: '16px 24px' }}>Title / Name</th>
+                        {activeTab === 'events' && <th style={{ padding: '16px 24px' }}>Date</th>}
+                        {activeTab === 'events' && <th style={{ padding: '16px 24px' }}>Type</th>}
+                        {activeTab === 'events' && <th style={{ padding: '16px 24px' }}>Mode</th>}
+                        {activeTab === 'events' && <th style={{ padding: '16px 24px' }}>Status</th>}
+                        {activeTab === 'events' && <th style={{ padding: '16px 24px' }}>Registrations</th>}
+                        {(activeTab === 'projects' || activeTab === 'blogs') && <th style={{ padding: '16px 24px' }}>Description/Excerpt</th>}
+                        {(activeTab === 'projects' || activeTab === 'blogs') && <th style={{ padding: '16px 24px' }}>Status</th>}
+                        {activeTab === 'members' && <th style={{ padding: '16px 24px' }}>Reg No</th>}
+                        {activeTab === 'members' && <th style={{ padding: '16px 24px' }}>Email</th>}
+                        {activeTab === 'members' && <th style={{ padding: '16px 24px' }}>Status</th>}
+                        {activeTab === 'profileUpdateRequests' && <th style={{ padding: '16px 24px' }}>Reg No</th>}
+                        {activeTab === 'profileUpdateRequests' && <th style={{ padding: '16px 24px' }}>Requested Changes</th>}
+                        {activeTab === 'profileUpdateRequests' && <th style={{ padding: '16px 24px' }}>Submitted</th>}
+                        {activeTab === 'leaderboard' && <th style={{ padding: '16px 24px' }}>Reg No</th>}
+                        {activeTab === 'leaderboard' && <th style={{ padding: '16px 24px' }}>Month Points</th>}
+                        {activeTab === 'leaderboard' && <th style={{ padding: '16px 24px' }}>Total Points</th>}
+                        {activeTab === 'contacts' && <th style={{ padding: '16px 24px' }}>Email</th>}
+                        {activeTab === 'contacts' && <th style={{ padding: '16px 24px' }}>Message</th>}
+                        {activeTab === 'contacts' && <th style={{ padding: '16px 24px' }}>Read</th>}
+                        {activeTab !== 'leaderboard' && <th style={{ padding: '16px 24px', textAlign: 'right' }}>Actions</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {displayedData.map((item) => (
+                        <tr key={item.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                          <td style={{ padding: '16px 24px', fontWeight: 500 }}>
+                            {item.title || item.name || item.memberName || item.subject || 'Unknown'}
+                            {activeTab === 'profileUpdateRequests' && item.memberEmail && (
+                              <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 400 }}>{item.memberEmail}</div>
+                            )}
+                            {activeTab === 'projects' && (item.submittedByEmail || item.submittedByName) && (
+                              <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 400, marginTop: '2px' }}>
+                                Submitter: {item.submittedByName || ''} {item.submittedByEmail ? `<${item.submittedByEmail}>` : ''}
+                              </div>
+                            )}
+                          </td>
+                          {activeTab === 'events' && <td style={{ padding: '16px 24px', color: 'var(--text-muted)' }}>{item.date}</td>}
+                          {activeTab === 'events' && <td style={{ padding: '16px 24px' }}><span className="badge badge-green">{item.type || 'Solo'}</span></td>}
+                          {activeTab === 'events' && <td style={{ padding: '16px 24px' }}><span className="badge badge-yellow">{item.mode || 'Intra-College'}</span></td>}
+                          {activeTab === 'events' && (
+                            <td style={{ padding: '16px 24px' }}>
+                              <span className={item.status === 'live' || item.status === 'ongoing' ? 'badge badge-accent' : item.status === 'completed' || item.status === 'past' ? 'badge badge-muted' : 'badge badge-blue'}>
+                                {item.status === 'live' || item.status === 'ongoing' ? '🔴 Live' : item.status === 'completed' || item.status === 'past' ? 'Completed' : 'Upcoming'}
+                              </span>
+                            </td>
+                          )}
+                          {activeTab === 'events' && (
+                            <td style={{ padding: '16px 24px' }}>
+                              <button
+                                onClick={() => handleOpenRegistrationsModal(item)}
+                                style={{
+                                  background: 'var(--accent-glow)',
+                                  border: '1px solid var(--accent)',
+                                  color: 'var(--accent)',
+                                  padding: '6px 12px',
+                                  borderRadius: '8px',
+                                  cursor: 'pointer',
+                                  fontWeight: 600,
+                                  fontSize: '0.85rem',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '6px'
+                                }}
+                              >
+                                <FaUsers /> {eventRegCounts[item.id] ?? 0} {item.type === 'Team' ? 'Teams' : 'Registered'}
+                              </button>
+                            </td>
+                          )}
+                          {(activeTab === 'projects' || activeTab === 'blogs') && <td style={{ padding: '16px 24px', color: 'var(--text-muted)', maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.description || item.excerpt}</td>}
+                          {(activeTab === 'projects' || activeTab === 'blogs') && (
+                            <td style={{ padding: '16px 24px' }}>
+                              <span className={item.status === 'approved' ? 'badge badge-green' : item.status === 'rejected' ? 'badge badge-red' : 'badge badge-yellow'}>
+                                {item.status || 'pending'}
+                              </span>
+                            </td>
+                          )}
+                          {activeTab === 'members' && (
+                            <td style={{ padding: '16px 24px' }}>
+                              <span style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--accent)', background: 'var(--bg-secondary)', padding: '4px 8px', borderRadius: '6px', fontSize: '0.85rem' }}>
+                                {item.registrationNumber || '—'}
+                              </span>
+                            </td>
+                          )}
+                          {activeTab === 'members' && <td style={{ padding: '16px 24px', color: 'var(--text-muted)' }}>{item.email}</td>}
+                          {activeTab === 'members' && <td style={{ padding: '16px 24px' }}><span className={item.status === 'approved' ? 'badge badge-green' : 'badge badge-yellow'}>{item.status || 'pending'}</span></td>}
                       
                       {/* Profile Updates specific cells */}
                       {activeTab === 'profileUpdateRequests' && (
@@ -842,6 +945,50 @@ export default function AdminDashboardPage() {
                       )}
                       {activeTab !== 'leaderboard' && (
                         <td style={{ padding: '16px 24px', textAlign: 'right' }}>
+                          {activeTab === 'projects' && item.status !== 'approved' && (
+                            <button
+                              onClick={() => handleApproveProject(item.id)}
+                              style={{
+                                background: 'rgba(0, 255, 136, 0.15)',
+                                border: '1px solid var(--accent)',
+                                color: 'var(--accent)',
+                                padding: '6px 12px',
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                                fontWeight: 600,
+                                fontSize: '0.8rem',
+                                marginRight: '8px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                              title="Approve Project"
+                            >
+                              <FaCheckCircle /> Approve
+                            </button>
+                          )}
+                          {activeTab === 'projects' && item.status === 'pending' && (
+                            <button
+                              onClick={() => handleRejectProject(item.id)}
+                              style={{
+                                background: 'rgba(239, 68, 68, 0.15)',
+                                border: '1px solid var(--danger)',
+                                color: 'var(--danger)',
+                                padding: '6px 12px',
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                                fontWeight: 600,
+                                fontSize: '0.8rem',
+                                marginRight: '8px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                              title="Reject Project"
+                            >
+                              <FaTimes /> Reject
+                            </button>
+                          )}
                           {activeTab === 'blogs' && item.status !== 'approved' && (
                             <button
                               onClick={() => handleApproveBlog(item.id)}
@@ -940,7 +1087,9 @@ export default function AdminDashboardPage() {
             </div>
           )}
         </div>
-      </div>
+      );
+    })()}
+  </div>
 
       {/* Delete Confirmation Modal */}
       <Modal isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Confirm Deletion">
@@ -1037,22 +1186,38 @@ export default function AdminDashboardPage() {
                 <input required type="text" className="form-input" value={formData.title || ''} onChange={(e) => setFormData({ ...formData, title: e.target.value })} />
               </div>
               <div className="form-group">
+                <label className="form-label">Verification Status *</label>
+                <select className="form-input" value={formData.status || 'pending'} onChange={(e) => setFormData({ ...formData, status: e.target.value })}>
+                  <option value="pending">Pending Verification</option>
+                  <option value="approved">Approved (Visible to Public & Member)</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+              </div>
+              <div className="form-group">
                 <label className="form-label">Description *</label>
                 <textarea required className="form-input" rows={3} value={formData.description || ''} onChange={(e) => setFormData({ ...formData, description: e.target.value })} />
               </div>
               <div className="form-group">
                 <label className="form-label">Tech Stack (comma separated) *</label>
-                <input required type="text" className="form-input" value={formData.techStack || ''} onChange={(e) => setFormData({ ...formData, techStack: e.target.value })} />
+                <input required type="text" className="form-input" placeholder="Next.js, Tailwind CSS, TypeScript" value={formData.techStack || ''} onChange={(e) => setFormData({ ...formData, techStack: e.target.value })} />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div className="form-group">
                   <label className="form-label">GitHub URL</label>
-                  <input type="url" className="form-input" value={formData.githubLink || ''} onChange={(e) => setFormData({ ...formData, githubLink: e.target.value })} />
+                  <input type="url" className="form-input" placeholder="https://github.com/..." value={formData.githubLink || ''} onChange={(e) => setFormData({ ...formData, githubLink: e.target.value })} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Live Link</label>
-                  <input type="url" className="form-input" value={formData.liveLink || ''} onChange={(e) => setFormData({ ...formData, liveLink: e.target.value })} />
+                  <input type="url" className="form-input" placeholder="https://..." value={formData.liveLink || ''} onChange={(e) => setFormData({ ...formData, liveLink: e.target.value })} />
                 </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Thumbnail Image URL</label>
+                <input type="url" className="form-input" placeholder="https://images.unsplash.com/..." value={formData.image || ''} onChange={(e) => setFormData({ ...formData, image: e.target.value })} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Contributors (comma separated)</label>
+                <input type="text" className="form-input" placeholder="Jane Doe, John Smith" value={formData.contributors || ''} onChange={(e) => setFormData({ ...formData, contributors: e.target.value })} />
               </div>
             </>
           )}

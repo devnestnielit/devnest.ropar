@@ -32,6 +32,47 @@ export default function ProjectCard({ project, onEdit, onDelete }: ProjectCardPr
       }}
       className="card hover-glow"
     >
+      {project.status === 'pending' && (
+        <div 
+          style={{ 
+            position: 'absolute', 
+            top: '12px', 
+            left: '12px', 
+            background: 'rgba(250, 204, 21, 0.92)', 
+            color: '#000', 
+            fontWeight: 700, 
+            fontSize: '0.72rem', 
+            padding: '4px 10px', 
+            borderRadius: '20px', 
+            zIndex: 10,
+            boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px'
+          }}
+        >
+          ⏳ Pending Verification
+        </div>
+      )}
+      {project.status === 'rejected' && (
+        <div 
+          style={{ 
+            position: 'absolute', 
+            top: '12px', 
+            left: '12px', 
+            background: 'rgba(239, 68, 68, 0.92)', 
+            color: '#fff', 
+            fontWeight: 700, 
+            fontSize: '0.72rem', 
+            padding: '4px 10px', 
+            borderRadius: '20px', 
+            zIndex: 10,
+            boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+          }}
+        >
+          ✕ Rejected
+        </div>
+      )}
       {isAdmin && (
         <div 
           style={{ 

@@ -96,6 +96,22 @@ export const deleteProject = async (id: string) => {
   return handleOp(() => deleteDoc(doc(db, 'projects', id)));
 };
 
+export const approveProject = async (id: string, adminEmail?: string) => {
+  return handleOp(() => updateDoc(doc(db, 'projects', id), {
+    status: 'approved',
+    verifiedAt: new Date().toISOString(),
+    verifiedBy: adminEmail || 'admin',
+    updatedAt: new Date().toISOString()
+  }));
+};
+
+export const rejectProject = async (id: string) => {
+  return handleOp(() => updateDoc(doc(db, 'projects', id), {
+    status: 'rejected',
+    updatedAt: new Date().toISOString()
+  }));
+};
+
 // --- BLOGS ---
 export const addBlog = async (blog: any) => {
   return handleOp(() => addDoc(collection(db, 'blogs'), blog));

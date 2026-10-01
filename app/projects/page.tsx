@@ -41,8 +41,16 @@ export default function ProjectsPage() {
   useEffect(() => {
     setIsAdmin(localStorage.getItem('devnest_admin') === 'true');
 
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
+      if (user) {
+        try {
+          const token = await user.getIdTokenResult();
+          if (token.claims.admin) {
+            setIsAdmin(true);
+          }
+        } catch (_) {}
+      }
       setAuthChecked(true);
     });
 
@@ -72,13 +80,22 @@ export default function ProjectsPage() {
     };
   }, []);
 
+  // Only approved projects are visible to the public (or legacy sample projects without status)
+  // Admins can see all submitted projects (including pending)
+  const visibleProjects = useMemo(() => {
+    return projects.filter(p => {
+      if (isAdmin) return true;
+      return p.status === 'approved' || (!p.status && !p.submittedByUid);
+    });
+  }, [projects, isAdmin]);
+
   const allTechnologies = useMemo(() => {
     const techs = new Set<string>();
-    projects.forEach(p => p.techStack?.forEach((t: string) => techs.add(t)));
+    visibleProjects.forEach(p => p.techStack?.forEach((t: string) => techs.add(t)));
     return ['All', ...Array.from(techs).sort()];
-  }, [projects]);
+  }, [visibleProjects]);
 
-  const filteredProjects = projects.filter(project => {
+  const filteredProjects = visibleProjects.filter(project => {
     if (filter === 'All') return true;
     return project.techStack?.includes(filter);
   });
@@ -130,11 +147,14 @@ export default function ProjectsPage() {
     }
 
     setFormLoading(true);
-    const projectData = {
+    const projectData: any = {
       ...formData,
       techStack: formData.techStack.split(',').map(s => s.trim()).filter(Boolean),
       contributors: formData.contributors.split(',').map(s => s.trim()).filter(Boolean),
       submittedByUid: currentUser?.uid || null,
+      submittedByName: currentUser?.displayName || formData.contributors || null,
+      submittedByEmail: currentUser?.email || null,
+      status: isAdmin ? (editingProject?.status || 'approved') : 'pending',
       updatedAt: new Date().toISOString()
     };
 
@@ -144,7 +164,15 @@ export default function ProjectsPage() {
 
     setFormLoading(false);
     if (!res.error) {
-      toast.success(editingProject ? 'Project updated!' : 'Project added successfully!');
+      if (isAdmin) {
+        toast.success(editingProject ? 'Project updated!' : 'Project added successfully!');
+      } else {
+        toast.success(
+          editingProject
+            ? 'Project updated!'
+            : 'Project submitted for verification! It will appear once approved by an Admin.'
+        );
+      }
       setIsModalOpen(false);
     } else {
       toast.error(res.error);
@@ -191,6 +219,33 @@ export default function ProjectsPage() {
 
       {!error && (
         <>
+          {isAdmin && projects.some(p => p.status === 'pending') && (
+            <div style={{
+              background: 'rgba(250, 204, 21, 0.1)',
+              border: '1px solid rgba(250, 204, 21, 0.3)',
+              borderRadius: 12,
+              padding: '14px 20px',
+              marginBottom: '2.5rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 12,
+              color: '#facc15'
+            }}>
+              <div style={{ fontSize: '0.9rem' }}>
+                ⚠️ <strong>Admin Notice:</strong> There {projects.filter(p => p.status === 'pending').length === 1 ? 'is 1 project' : `are ${projects.filter(p => p.status === 'pending').length} projects`} pending verification. Pending projects are hidden from public and submitter dashboard until verified.
+              </div>
+              <button
+                onClick={() => router.push('/admin/dashboard')}
+                className="btn-outline"
+                style={{ padding: '6px 14px', fontSize: '0.78rem', borderColor: '#facc15', color: '#facc15' }}
+              >
+                Open Admin Panel
+              </button>
+            </div>
+          )}
+
           <div style={{ marginBottom: '3rem', position: 'relative' }}>
             <div style={{
               display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '16px',
@@ -246,6 +301,21 @@ export default function ProjectsPage() {
         title={editingProject ? "Edit Project" : "Submit Your Project"}
       >
         <form onSubmit={handleFormSubmit}>
+          {!isAdmin && (
+            <div style={{
+              background: 'rgba(59, 130, 246, 0.08)',
+              border: '1px solid rgba(59, 130, 246, 0.3)',
+              borderRadius: 10,
+              padding: '12px 14px',
+              marginBottom: 18,
+              fontSize: '0.83rem',
+              color: 'var(--info)',
+              lineHeight: 1.5
+            }}>
+              ℹ️ <strong>Admin Verification Required:</strong> Your submitted project will be verified by an Admin before becoming visible on the public Projects page and in your member dashboard.
+            </div>
+          )}
+
           <div className="form-group">
             <label className="form-label">Project Title *</label>
             <input
