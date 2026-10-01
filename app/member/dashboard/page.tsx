@@ -771,6 +771,7 @@ export default function MemberDashboardPage() {
             {(() => {
               const verifiedProjects = myProjects.filter(p => p.status === 'approved' || (!p.status && !p.submittedByUid));
               const pendingProjects = myProjects.filter(p => p.status === 'pending');
+              const rejectedProjects = myProjects.filter(p => p.status === 'rejected');
 
               return (
                 <motion.section
@@ -810,6 +811,30 @@ export default function MemberDashboardPage() {
                         </span>
                       </div>
                       <span className="badge badge-yellow" style={{ fontSize: '0.7rem', flexShrink: 0 }}>Pending Admin Verification</span>
+                    </div>
+                  )}
+
+                  {rejectedProjects.length > 0 && (
+                    <div style={{
+                      padding: '12px 20px',
+                      background: 'rgba(239, 68, 68, 0.08)',
+                      borderBottom: '1px solid rgba(239, 68, 68, 0.2)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 8,
+                      fontSize: '0.82rem',
+                      color: 'var(--danger)'
+                    }}>
+                      {rejectedProjects.map((rp) => (
+                        <div key={rp.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                          <div>
+                            <strong>✕ &ldquo;{rp.title}&rdquo; was not approved:</strong> {rp.rejectionReason || 'Did not meet submission guidelines.'}
+                          </div>
+                          <Link href="/projects" style={{ color: 'var(--accent)', textDecoration: 'underline', fontSize: '0.75rem', flexShrink: 0 }}>
+                            Edit & Resubmit
+                          </Link>
+                        </div>
+                      ))}
                     </div>
                   )}
 

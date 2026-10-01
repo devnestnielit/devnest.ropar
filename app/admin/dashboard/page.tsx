@@ -250,12 +250,19 @@ export default function AdminDashboardPage() {
 
   // Reject a project submission
   const handleRejectProject = async (projectId: string) => {
-    if (!window.confirm('Reject this project submission?')) return;
+    const reason = window.prompt(
+      'Enter reason for rejection (this will be shown to the member in their dashboard):',
+      'Does not meet submission guidelines or is incomplete.'
+    );
+    if (reason === null) return; // Admin cancelled
 
     try {
       await auth.currentUser?.getIdToken(true);
       await updateDoc(doc(db, 'projects', projectId), {
         status: 'rejected',
+        rejectionReason: reason.trim() || 'Does not meet submission guidelines.',
+        rejectedAt: new Date().toISOString(),
+        rejectedBy: user?.email || 'admin',
         updatedAt: new Date().toISOString()
       });
       toast.success('Project marked as rejected.');
@@ -800,6 +807,7 @@ export default function AdminDashboardPage() {
                         {activeTab === 'events' && <th style={{ padding: '16px 24px' }}>Registrations</th>}
                         {(activeTab === 'projects' || activeTab === 'blogs') && <th style={{ padding: '16px 24px' }}>Description/Excerpt</th>}
                         {(activeTab === 'projects' || activeTab === 'blogs') && <th style={{ padding: '16px 24px' }}>Status</th>}
+                        {activeTab === 'projects' && <th style={{ padding: '16px 24px' }}>Links</th>}
                         {activeTab === 'members' && <th style={{ padding: '16px 24px' }}>Reg No</th>}
                         {activeTab === 'members' && <th style={{ padding: '16px 24px' }}>Email</th>}
                         {activeTab === 'members' && <th style={{ padding: '16px 24px' }}>Status</th>}
@@ -865,8 +873,32 @@ export default function AdminDashboardPage() {
                           {(activeTab === 'projects' || activeTab === 'blogs') && (
                             <td style={{ padding: '16px 24px' }}>
                               <span className={item.status === 'approved' ? 'badge badge-green' : item.status === 'rejected' ? 'badge badge-red' : 'badge badge-yellow'}>
-                                {item.status || 'pending'}
+                                {item.status === 'approved' ? 'Approved' : item.status === 'rejected' ? 'Rejected' : 'Pending Verification'}
                               </span>
+                              {activeTab === 'projects' && item.status === 'rejected' && item.rejectionReason && (
+                                <div style={{ fontSize: '0.72rem', color: 'var(--danger)', marginTop: '4px', maxWidth: '200px', lineHeight: 1.4 }}>
+                                  Reason: {item.rejectionReason}
+                                </div>
+                              )}
+                            </td>
+                          )}
+                          {activeTab === 'projects' && (
+                            <td style={{ padding: '16px 24px' }}>
+                              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                {item.githubLink ? (
+                                  <a href={item.githubLink} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', fontSize: '0.8rem', textDecoration: 'underline' }}>
+                                    GitHub
+                                  </a>
+                                ) : null}
+                                {item.liveLink ? (
+                                  <a href={item.liveLink} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--info)', fontSize: '0.8rem', textDecoration: 'underline' }}>
+                                    Live
+                                  </a>
+                                ) : null}
+                                {!item.githubLink && !item.liveLink && (
+                                  <span style={{ color: 'var(--text-dim)', fontSize: '0.8rem' }}>—</span>
+                                )}
+                              </div>
                             </td>
                           )}
                           {activeTab === 'members' && (
@@ -945,49 +977,53 @@ export default function AdminDashboardPage() {
                       )}
                       {activeTab !== 'leaderboard' && (
                         <td style={{ padding: '16px 24px', textAlign: 'right' }}>
-                          {activeTab === 'projects' && item.status !== 'approved' && (
-                            <button
-                              onClick={() => handleApproveProject(item.id)}
-                              style={{
-                                background: 'rgba(0, 255, 136, 0.15)',
-                                border: '1px solid var(--accent)',
-                                color: 'var(--accent)',
-                                padding: '6px 12px',
-                                borderRadius: '8px',
-                                cursor: 'pointer',
-                                fontWeight: 600,
-                                fontSize: '0.8rem',
-                                marginRight: '8px',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '4px'
-                              }}
-                              title="Approve Project"
-                            >
-                              <FaCheckCircle /> Approve
-                            </button>
-                          )}
-                          {activeTab === 'projects' && item.status === 'pending' && (
-                            <button
-                              onClick={() => handleRejectProject(item.id)}
-                              style={{
-                                background: 'rgba(239, 68, 68, 0.15)',
-                                border: '1px solid var(--danger)',
-                                color: 'var(--danger)',
-                                padding: '6px 12px',
-                                borderRadius: '8px',
-                                cursor: 'pointer',
-                                fontWeight: 600,
-                                fontSize: '0.8rem',
-                                marginRight: '8px',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '4px'
-                              }}
-                              title="Reject Project"
-                            >
-                              <FaTimes /> Reject
-                            </button>
+                          {activeTab === 'projects' && (
+                            <>
+                              {item.status !== 'approved' && (
+                                <button
+                                  onClick={() => handleApproveProject(item.id)}
+                                  style={{
+                                    background: 'rgba(0, 255, 136, 0.15)',
+                                    border: '1px solid var(--accent)',
+                                    color: 'var(--accent)',
+                                    padding: '6px 12px',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    fontWeight: 600,
+                                    fontSize: '0.8rem',
+                                    marginRight: '8px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                  }}
+                                  title="Approve Project (make visible to public & member)"
+                                >
+                                  <FaCheckCircle /> Approve
+                                </button>
+                              )}
+                              {item.status !== 'rejected' && (
+                                <button
+                                  onClick={() => handleRejectProject(item.id)}
+                                  style={{
+                                    background: 'rgba(239, 68, 68, 0.15)',
+                                    border: '1px solid var(--danger)',
+                                    color: 'var(--danger)',
+                                    padding: '6px 12px',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    fontWeight: 600,
+                                    fontSize: '0.8rem',
+                                    marginRight: '8px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                  }}
+                                  title={item.status === 'approved' ? 'Revoke Approval / Reject' : 'Reject Project'}
+                                >
+                                  <FaTimes /> {item.status === 'approved' ? 'Revoke' : 'Reject'}
+                                </button>
+                              )}
+                            </>
                           )}
                           {activeTab === 'blogs' && item.status !== 'approved' && (
                             <button
