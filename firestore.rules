@@ -27,7 +27,8 @@ service cloud.firestore {
       return data.keys().hasOnly([
           'type', 'mode', 'status', 'submittedByUid',
           'name', 'college', 'branch', 'year', 'semester', 'regNumber',
-          'teamName', 'teamLeader', 'memberCount', 'members', 'eventTitle'
+          'teamName', 'teamLeader', 'memberCount', 'members', 'eventTitle',
+          'eventId', 'createdAt', 'participantUids', 'participantRegNumbers'
         ])
         && data.type in ['Solo', 'Team']
         && data.status in ['pending', 'approved']
@@ -59,7 +60,13 @@ service cloud.firestore {
       // but the payload shape is validated — see isValidRegistration().
       match /registrations/{regId} {
         allow create: if isValidRegistration(request.resource.data);
-        allow read, update, delete: if isAdmin()
+        // Admin can do anything.
+        // The submitter (solo or team leader) can read/update/delete their own reg.
+        // Any team member whose UID is listed in participantUids can read (to see score).
+        allow read: if isAdmin()
+          || (isAuthenticated() && resource.data.submittedByUid == request.auth.uid)
+          || (isAuthenticated() && request.auth.uid in resource.data.participantUids);
+        allow update, delete: if isAdmin()
           || (isAuthenticated() && resource.data.submittedByUid == request.auth.uid);
       }
     }

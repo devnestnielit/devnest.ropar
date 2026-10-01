@@ -1,11 +1,11 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import {
-  collection, query, where, getDocs, updateDoc, addDoc, doc,
+  collection, query, where, getDocs, updateDoc, addDoc, doc, getDoc,
   limit, orderBy, onSnapshot
 } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
@@ -14,7 +14,7 @@ import {
   FaGithub, FaLinkedin, FaSignOutAlt, FaTrophy, FaCalendarAlt,
   FaProjectDiagram, FaEdit, FaSave, FaTimes, FaUser, FaLink,
   FaExternalLinkAlt, FaMapMarkerAlt, FaClock, FaHourglassHalf, FaCheckCircle,
-  FaClipboardList, FaUsers
+  FaClipboardList, FaUsers, FaStar, FaMedal, FaChevronDown, FaChevronUp
 } from 'react-icons/fa';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -52,6 +52,12 @@ export default function MemberDashboardPage() {
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<any[]>([]);
   const [myProjects, setMyProjects] = useState<any[]>([]);
+
+  // enriched registrations: each entry has the reg stub from member doc +
+  // live event status + the registration doc score from Firestore
+  const [enrichedRegs, setEnrichedRegs] = useState<any[]>([]);
+  const [regsLoading, setRegsLoading] = useState(false);
+  const [expandedReg, setExpandedReg] = useState<string | null>(null);
 
   // edit mode
   const [editing, setEditing] = useState(false);
@@ -192,6 +198,63 @@ export default function MemberDashboardPage() {
     });
     return () => unsub();
   }, [profile]);
+
+  // ── live: enriched registrations ──────────────────────────────────────
+  // For each entry in profile.myRegistrations, fetch the live event status
+  // and (if completed) the registration score from Firestore.
+  const loadEnrichedRegs = useCallback(async (regs: any[], uid: string) => {
+    if (!regs || regs.length === 0) { setEnrichedRegs([]); return; }
+    setRegsLoading(true);
+    try {
+      const enriched = await Promise.all(
+        [...regs].reverse().map(async (reg: any) => {
+          try {
+            // 1. Fetch live event document for status + date
+            let eventStatus = 'upcoming';
+            let eventDate: string | null = null;
+            let eventVenue: string | null = null;
+            if (reg.eventId) {
+              const evDoc = await getDoc(doc(db, 'events', reg.eventId));
+              if (evDoc.exists()) {
+                const evData = evDoc.data();
+                eventStatus = evData.status || 'upcoming';
+                eventDate = evData.date || null;
+                eventVenue = evData.venue || null;
+              }
+            }
+
+            // 2. Fetch registration doc for score (only if we have both ids)
+            let score: number | null = null;
+            let regStatus: string | null = null;
+            let scoredAt: string | null = null;
+            if (reg.eventId && reg.regId) {
+              try {
+                const regDoc = await getDoc(doc(db, 'events', reg.eventId, 'registrations', reg.regId));
+                if (regDoc.exists()) {
+                  const rd = regDoc.data();
+                  score = typeof rd.score === 'number' ? rd.score : null;
+                  regStatus = rd.status || null;
+                  scoredAt = rd.scoredAt || null;
+                }
+              } catch (_) { /* non-fatal — rules allow own-reg read */ }
+            }
+
+            return { ...reg, eventStatus, eventDate, eventVenue, score, regStatus, scoredAt };
+          } catch (_) {
+            return { ...reg, eventStatus: 'upcoming', score: null };
+          }
+        })
+      );
+      setEnrichedRegs(enriched);
+    } finally {
+      setRegsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!profile) return;
+    loadEnrichedRegs(profile.myRegistrations || [], profile.uid);
+  }, [profile, loadEnrichedRegs]);
 
   // ── derived stats ──────────────────────────────────────────────────────
   const myLeaderboardEntry = leaderboard.find(e => e.id === memberDocId || (e.registrationNumber && e.registrationNumber === profile?.registrationNumber) || e.name === profile?.name);
@@ -440,7 +503,7 @@ export default function MemberDashboardPage() {
               )}
             </motion.section>
 
-            {/* My Event Registrations */}
+            {/* My Event Registrations — live enriched */}
             <motion.section
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -451,53 +514,211 @@ export default function MemberDashboardPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <FaClipboardList style={{ color: 'var(--accent)', fontSize: '1rem' }} />
                   <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: '1rem' }}>My Event Registrations</span>
+                  {enrichedRegs.length > 0 && (
+                    <span className="badge badge-blue" style={{ fontSize: '0.65rem', padding: '2px 8px' }}>{enrichedRegs.length}</span>
+                  )}
                 </div>
                 <Link href="/events" style={{ fontSize: '0.8rem', color: 'var(--accent)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
                   Browse events <FaExternalLinkAlt size={10} />
                 </Link>
               </div>
 
-              {(!profile?.myRegistrations || profile.myRegistrations.length === 0) ? (
-                <div style={{ padding: '40px 24px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                  You haven&apos;t registered for any events yet.
-                </div>
-              ) : (
-                [...profile.myRegistrations].reverse().map((reg: any, i: number, arr: any[]) => (
-                  <div
-                    key={reg.regId || i}
-                    style={{
-                      padding: '16px 24px',
-                      borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none',
-                      display: 'flex', alignItems: 'center', gap: 16,
-                    }}
-                  >
-                    <div style={{
-                      width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
-                      background: 'var(--accent)', boxShadow: '0 0 8px var(--accent-glow-strong)',
-                    }} />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>{reg.eventTitle || 'Event'}</div>
-                      <div style={{ display: 'flex', gap: 10, fontSize: '0.8rem', color: 'var(--text-muted)', flexWrap: 'wrap', alignItems: 'center' }}>
-                        <span className="badge badge-blue" style={{ fontSize: '0.65rem', padding: '2px 8px' }}>
-                          {reg.type || 'Solo'}
-                        </span>
-                        {reg.type === 'Team' && (
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <FaUsers size={10} /> {reg.role === 'leader' ? 'Team Leader' : 'Team Member'}{reg.teamName ? ` • ${reg.teamName}` : ''}
-                          </span>
-                        )}
-                        {reg.registeredAt && (
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <FaCalendarAlt size={10} /> {new Date(reg.registeredAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                          </span>
-                        )}
+              {regsLoading ? (
+                <div style={{ padding: '32px 24px' }}>
+                  {[0,1,2].map(i => (
+                    <div key={i} style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 16 }}>
+                      <div className="skeleton" style={{ width: 10, height: 10, borderRadius: '50%', flexShrink: 0 }} />
+                      <div style={{ flex: 1 }}>
+                        <div className="skeleton" style={{ width: '60%', height: 14, marginBottom: 8 }} />
+                        <div className="skeleton" style={{ width: '40%', height: 10 }} />
                       </div>
                     </div>
-                    <Link href="/events" className="btn-outline" style={{ padding: '6px 16px', fontSize: '0.75rem', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                      View
-                    </Link>
-                  </div>
-                ))
+                  ))}
+                </div>
+              ) : enrichedRegs.length === 0 ? (
+                <div style={{ padding: '40px 24px', textAlign: 'center' }}>
+                  <FaCalendarAlt style={{ fontSize: '2.5rem', color: 'var(--border-light)', marginBottom: 12 }} />
+                  <p style={{ color: 'var(--text-muted)', marginBottom: 16 }}>You haven&apos;t registered for any events yet.</p>
+                  <Link href="/events" className="btn-primary" style={{ padding: '10px 24px', fontSize: '0.85rem' }}>
+                    Browse Events
+                  </Link>
+                </div>
+              ) : (
+                enrichedRegs.map((reg: any, i: number) => {
+                  const isCompleted = reg.eventStatus === 'completed' || reg.eventStatus === 'past';
+                  const isLive = reg.eventStatus === 'live' || reg.eventStatus === 'ongoing';
+                  const isExpanded = expandedReg === (reg.regId || String(i));
+
+                  const statusColor = isCompleted ? 'var(--text-dim)' : isLive ? 'var(--accent)' : 'var(--info)';
+                  const statusGlow = isCompleted ? 'none' : isLive ? '0 0 8px var(--accent-glow-strong)' : 'none';
+                  const statusLabel = isCompleted ? 'Completed' : isLive ? 'Live' : 'Upcoming';
+                  const statusBadgeClass = isCompleted ? 'badge-yellow' : isLive ? 'badge-green' : 'badge-blue';
+
+                  return (
+                    <div key={reg.regId || i} style={{ borderBottom: i < enrichedRegs.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                      {/* Main row */}
+                      <div
+                        onClick={() => {
+                          if (isCompleted) setExpandedReg(isExpanded ? null : (reg.regId || String(i)));
+                        }}
+                        style={{
+                          padding: '16px 24px',
+                          display: 'flex', alignItems: 'center', gap: 16,
+                          cursor: isCompleted ? 'pointer' : 'default',
+                          transition: 'background 0.2s',
+                          background: isExpanded ? 'rgba(0,255,136,0.04)' : 'transparent',
+                        }}
+                        onMouseEnter={e => { if (isCompleted) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.03)'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = isExpanded ? 'rgba(0,255,136,0.04)' : 'transparent'; }}
+                      >
+                        {/* Status dot */}
+                        <div style={{
+                          width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
+                          background: statusColor, boxShadow: statusGlow,
+                        }} />
+
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5, flexWrap: 'wrap' }}>
+                            <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.95rem' }}>
+                              {reg.eventTitle || 'Event'}
+                            </span>
+                            <span className={`badge ${statusBadgeClass}`} style={{ fontSize: '0.6rem', padding: '2px 8px' }}>
+                              {statusLabel}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', gap: 10, fontSize: '0.78rem', color: 'var(--text-muted)', flexWrap: 'wrap', alignItems: 'center' }}>
+                            <span className="badge badge-blue" style={{ fontSize: '0.6rem', padding: '2px 6px' }}>
+                              {reg.type || 'Solo'}
+                            </span>
+                            {reg.type === 'Team' && (
+                              <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                                <FaUsers size={9} /> {reg.role === 'leader' ? 'Team Leader' : 'Member'}{reg.teamName ? ` · ${reg.teamName}` : ''}
+                              </span>
+                            )}
+                            {reg.eventDate && (
+                              <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                                <FaCalendarAlt size={9} />
+                                {new Date(reg.eventDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              </span>
+                            )}
+                            {/* Inline score pill for completed events */}
+                            {isCompleted && reg.score !== null && (
+                              <span style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 4,
+                                background: 'rgba(255,215,0,0.12)', color: 'var(--gold)',
+                                borderRadius: 20, padding: '2px 10px', fontFamily: 'var(--font-heading)',
+                                fontWeight: 700, fontSize: '0.72rem', border: '1px solid rgba(255,215,0,0.25)'
+                              }}>
+                                <FaStar size={9} /> {reg.score} pts
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                          {isCompleted && (
+                            <button
+                              style={{
+                                background: 'none', border: 'none', cursor: 'pointer',
+                                color: 'var(--text-dim)', padding: 4, display: 'flex',
+                                transition: 'color 0.2s'
+                              }}
+                              title={isExpanded ? 'Collapse' : 'View results'}
+                            >
+                              {isExpanded ? <FaChevronUp size={12} /> : <FaChevronDown size={12} />}
+                            </button>
+                          )}
+                          {!isCompleted && (
+                            <Link href="/events" className="btn-outline" style={{ padding: '5px 14px', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>
+                              View
+                            </Link>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Expandable result panel — only for completed events */}
+                      <AnimatePresence>
+                        {isCompleted && isExpanded && (
+                          <motion.div
+                            key="detail"
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.25, ease: 'easeInOut' }}
+                            style={{ overflow: 'hidden' }}
+                          >
+                            <div style={{
+                              margin: '0 24px 16px',
+                              background: 'rgba(0,0,0,0.25)',
+                              border: '1px solid var(--border)',
+                              borderRadius: 14,
+                              padding: '18px 20px',
+                            }}>
+                              <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', fontFamily: 'var(--font-heading)', letterSpacing: 1, marginBottom: 14 }}>EVENT RESULTS</div>
+
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 12 }}>
+                                {/* Score */}
+                                <div style={{
+                                  background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.2)',
+                                  borderRadius: 10, padding: '12px 14px', textAlign: 'center'
+                                }}>
+                                  <div style={{ fontSize: '0.65rem', color: 'var(--text-dim)', fontFamily: 'var(--font-heading)', letterSpacing: 1, marginBottom: 6 }}>SCORE</div>
+                                  <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--gold)', fontFamily: 'var(--font-heading)' }}>
+                                    {reg.score !== null ? reg.score : '—'}
+                                  </div>
+                                  {reg.score !== null && <div style={{ fontSize: '0.65rem', color: 'var(--text-dim)' }}>out of 100</div>}
+                                </div>
+
+                                {/* Points awarded */}
+                                <div style={{
+                                  background: 'rgba(0,255,136,0.06)', border: '1px solid rgba(0,255,136,0.15)',
+                                  borderRadius: 10, padding: '12px 14px', textAlign: 'center'
+                                }}>
+                                  <div style={{ fontSize: '0.65rem', color: 'var(--text-dim)', fontFamily: 'var(--font-heading)', letterSpacing: 1, marginBottom: 6 }}>POINTS EARNED</div>
+                                  <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--accent)', fontFamily: 'var(--font-heading)' }}>
+                                    {reg.score !== null ? `+${reg.score}` : '—'}
+                                  </div>
+                                  {reg.score !== null && <div style={{ fontSize: '0.65rem', color: 'var(--text-dim)' }}>XP added to total</div>}
+                                </div>
+
+                                {/* Participation badge */}
+                                <div style={{
+                                  background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)',
+                                  borderRadius: 10, padding: '12px 14px', textAlign: 'center'
+                                }}>
+                                  <div style={{ fontSize: '0.65rem', color: 'var(--text-dim)', fontFamily: 'var(--font-heading)', letterSpacing: 1, marginBottom: 6 }}>PARTICIPATION</div>
+                                  <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--info)', fontFamily: 'var(--font-heading)' }}>
+                                    <FaCheckCircle style={{ marginRight: 4 }} />
+                                    {reg.regStatus === 'approved' ? 'Verified' : 'Participated'}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {reg.score === null && (
+                                <div style={{ marginTop: 14, padding: '10px 14px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, fontSize: '0.8rem', color: 'var(--warning)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <FaHourglassHalf />
+                                  Points haven&apos;t been assigned by the admin yet. Check back later.
+                                </div>
+                              )}
+
+                              {reg.scoredAt && (
+                                <div style={{ marginTop: 10, fontSize: '0.72rem', color: 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  <FaClock size={9} /> Scored on {new Date(reg.scoredAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
+                                </div>
+                              )}
+
+                              <div style={{ marginTop: 14 }}>
+                                <Link href="/events" className="btn-outline" style={{ padding: '6px 16px', fontSize: '0.75rem' }}>
+                                  <FaExternalLinkAlt size={10} /> View Event
+                                </Link>
+                              </div>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  );
+                })
               )}
             </motion.section>
 
