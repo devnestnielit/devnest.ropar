@@ -6,7 +6,8 @@ import { collection, getDocs, deleteDoc, doc, updateDoc, addDoc, query, where, i
 import { auth, db } from '@/lib/firebase';
 import {
   FaSignOutAlt, FaCalendarAlt, FaProjectDiagram, FaPenNib,
-  FaUsers, FaEnvelope, FaTrash, FaEdit, FaPlus, FaTrophy, FaCheckCircle, FaTimes, FaUserCheck, FaMedal
+  FaUsers, FaEnvelope, FaTrash, FaEdit, FaPlus, FaTrophy, FaCheckCircle, FaTimes, FaUserCheck, FaMedal,
+  FaExternalLinkAlt, FaGithub
 } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 import { seedFirestore } from '@/lib/seedFirestore';
@@ -32,6 +33,9 @@ export default function AdminDashboardPage() {
 
   // Project status filter state
   const [projectStatusFilter, setProjectStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+
+  // Detail inspection modal state (e.g. project description, blog excerpt, contact message)
+  const [viewingDetailItem, setViewingDetailItem] = useState<any | null>(null);
 
   // Event Registrations & Scoring State
   const [eventRegCounts, setEventRegCounts] = useState<Record<string, number>>({});
@@ -241,6 +245,9 @@ export default function AdminDashboardPage() {
         updatedAt: new Date().toISOString()
       });
       toast.success('Project approved! It is now publicly visible and in the member\'s dashboard.');
+      if (viewingDetailItem && viewingDetailItem.id === projectId) {
+        setViewingDetailItem((prev: any) => ({ ...prev, status: 'approved' }));
+      }
       fetchData('projects');
     } catch (err: any) {
       console.error('Approve project error:', err);
@@ -266,6 +273,13 @@ export default function AdminDashboardPage() {
         updatedAt: new Date().toISOString()
       });
       toast.success('Project marked as rejected.');
+      if (viewingDetailItem && viewingDetailItem.id === projectId) {
+        setViewingDetailItem((prev: any) => ({
+          ...prev,
+          status: 'rejected',
+          rejectionReason: reason.trim() || 'Does not meet submission guidelines.'
+        }));
+      }
       fetchData('projects');
     } catch (err: any) {
       console.error('Reject project error:', err);
@@ -869,7 +883,65 @@ export default function AdminDashboardPage() {
                               </button>
                             </td>
                           )}
-                          {(activeTab === 'projects' || activeTab === 'blogs') && <td style={{ padding: '16px 24px', color: 'var(--text-muted)', maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.description || item.excerpt}</td>}
+                          {(activeTab === 'projects' || activeTab === 'blogs') && (
+                            <td
+                              onClick={() => setViewingDetailItem({ ...item, _type: activeTab })}
+                              title="Click to view full description & details"
+                              style={{
+                                padding: '16px 24px',
+                                maxWidth: '320px',
+                                cursor: 'pointer',
+                                userSelect: 'none'
+                              }}
+                            >
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px',
+                                  color: 'var(--text-muted)',
+                                  transition: 'all 0.2s ease',
+                                  padding: '4px 8px',
+                                  borderRadius: '6px',
+                                  margin: '-4px -8px'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.color = 'var(--text-primary)';
+                                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.color = 'var(--text-muted)';
+                                  e.currentTarget.style.background = 'transparent';
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    flex: 1
+                                  }}
+                                >
+                                  {item.description || item.excerpt || '—'}
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: '0.72rem',
+                                    color: 'var(--accent)',
+                                    background: 'var(--accent-glow)',
+                                    border: '1px solid rgba(0, 255, 136, 0.3)',
+                                    padding: '2px 7px',
+                                    borderRadius: '4px',
+                                    whiteSpace: 'nowrap',
+                                    flexShrink: 0,
+                                    fontWeight: 600
+                                  }}
+                                >
+                                  Open ↗
+                                </span>
+                              </div>
+                            </td>
+                          )}
                           {(activeTab === 'projects' || activeTab === 'blogs') && (
                             <td style={{ padding: '16px 24px' }}>
                               <span className={item.status === 'approved' ? 'badge badge-green' : item.status === 'rejected' ? 'badge badge-red' : 'badge badge-yellow'}>
@@ -963,7 +1035,46 @@ export default function AdminDashboardPage() {
                       {activeTab === 'leaderboard' && <td style={{ padding: '16px 24px', fontWeight: 700, color: 'var(--accent)' }}>{(item.currentMonthPoints ?? 0).toLocaleString()} XP</td>}
                       {activeTab === 'leaderboard' && <td style={{ padding: '16px 24px', color: 'var(--text-muted)' }}>{(item.totalPoints ?? 0).toLocaleString()} XP</td>}
                       {activeTab === 'contacts' && <td style={{ padding: '16px 24px', color: 'var(--text-muted)' }}>{item.email}</td>}
-                      {activeTab === 'contacts' && <td style={{ padding: '16px 24px', color: 'var(--text-muted)', maxWidth: '250px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.message}</td>}
+                      {activeTab === 'contacts' && (
+                        <td
+                          onClick={() => setViewingDetailItem({ ...item, title: `Message from ${item.name || item.email}`, _type: 'contacts' })}
+                          title="Click to view full message"
+                          style={{
+                            padding: '16px 24px',
+                            maxWidth: '280px',
+                            cursor: 'pointer',
+                            userSelect: 'none'
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              color: 'var(--text-muted)',
+                              padding: '4px 8px',
+                              borderRadius: '6px',
+                              margin: '-4px -8px',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.color = 'var(--text-primary)';
+                              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.color = 'var(--text-muted)';
+                              e.currentTarget.style.background = 'transparent';
+                            }}
+                          >
+                            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
+                              {item.message}
+                            </span>
+                            <span style={{ fontSize: '0.72rem', color: 'var(--accent)', background: 'var(--accent-glow)', border: '1px solid rgba(0, 255, 136, 0.3)', padding: '2px 7px', borderRadius: '4px', whiteSpace: 'nowrap', flexShrink: 0, fontWeight: 600 }}>
+                              Open ↗
+                            </span>
+                          </div>
+                        </td>
+                      )}
                       {activeTab === 'contacts' && (
                         <td style={{ padding: '16px 24px' }}>
                           <button
@@ -1568,6 +1679,255 @@ export default function AdminDashboardPage() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+      </Modal>
+
+      {/* Item Details / Full Description Inspection Modal */}
+      <Modal
+        isOpen={!!viewingDetailItem}
+        onClose={() => setViewingDetailItem(null)}
+        title={viewingDetailItem?.title || viewingDetailItem?.name || 'Item Details'}
+      >
+        {viewingDetailItem && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* Header Status & Metadata Badges */}
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+              {viewingDetailItem._type === 'projects' && (
+                <span className={viewingDetailItem.status === 'approved' ? 'badge badge-green' : viewingDetailItem.status === 'rejected' ? 'badge badge-red' : 'badge badge-yellow'}>
+                  Status: {viewingDetailItem.status === 'approved' ? 'Approved' : viewingDetailItem.status === 'rejected' ? 'Rejected' : 'Pending Verification'}
+                </span>
+              )}
+              {viewingDetailItem._type === 'blogs' && (
+                <span className={viewingDetailItem.status === 'approved' ? 'badge badge-green' : 'badge badge-yellow'}>
+                  Status: {viewingDetailItem.status === 'approved' ? 'Approved' : 'Pending Verification'}
+                </span>
+              )}
+              {viewingDetailItem.category && (
+                <span className="badge badge-blue">Category: {viewingDetailItem.category}</span>
+              )}
+              {viewingDetailItem.createdAt && (
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>
+                  Submitted: {new Date(viewingDetailItem.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
+            </div>
+
+            {/* Submitter Info Card (for projects) */}
+            {viewingDetailItem._type === 'projects' && (viewingDetailItem.submittedByName || viewingDetailItem.submittedByEmail || viewingDetailItem.registrationNumber) && (
+              <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '10px', padding: '12px 16px' }}>
+                <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-dim)', marginBottom: '6px' }}>
+                  Submitter Information
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', fontSize: '0.9rem' }}>
+                  {viewingDetailItem.submittedByName && (
+                    <div><strong style={{ color: 'var(--text-primary)' }}>{viewingDetailItem.submittedByName}</strong></div>
+                  )}
+                  {viewingDetailItem.submittedByEmail && (
+                    <div style={{ color: 'var(--text-muted)' }}>✉️ {viewingDetailItem.submittedByEmail}</div>
+                  )}
+                  {viewingDetailItem.registrationNumber && (
+                    <div style={{ fontFamily: 'monospace', color: 'var(--accent)' }}>ID: {viewingDetailItem.registrationNumber}</div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Rejection notice if rejected */}
+            {viewingDetailItem._type === 'projects' && viewingDetailItem.status === 'rejected' && viewingDetailItem.rejectionReason && (
+              <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--danger)', borderRadius: '10px', padding: '12px 16px', color: 'var(--danger)', fontSize: '0.88rem' }}>
+                <strong>Rejection Reason:</strong> {viewingDetailItem.rejectionReason}
+              </div>
+            )}
+
+            {/* Full Description Box */}
+            <div>
+              <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>
+                {viewingDetailItem._type === 'contacts' ? 'Full Message:' : 'Full Description:'}
+              </div>
+              <div
+                style={{
+                  background: 'var(--bg-primary)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '10px',
+                  padding: '16px',
+                  color: 'var(--text-secondary)',
+                  fontSize: '0.92rem',
+                  lineHeight: 1.65,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  maxHeight: '350px',
+                  overflowY: 'auto'
+                }}
+              >
+                {viewingDetailItem.description || viewingDetailItem.excerpt || viewingDetailItem.message || viewingDetailItem.content || 'No description provided.'}
+              </div>
+            </div>
+
+            {/* Tech Stack / Tags */}
+            {viewingDetailItem.tags && viewingDetailItem.tags.length > 0 && (
+              <div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>
+                  Technologies / Tags:
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {viewingDetailItem.tags.map((t: string, i: number) => (
+                    <span
+                      key={i}
+                      style={{
+                        background: 'var(--bg-secondary)',
+                        border: '1px solid var(--border)',
+                        color: 'var(--accent)',
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        fontSize: '0.8rem',
+                        fontFamily: 'monospace'
+                      }}
+                    >
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Project Links (GitHub & Live URL) */}
+            {viewingDetailItem._type === 'projects' && (viewingDetailItem.githubLink || viewingDetailItem.liveLink) && (
+              <div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>
+                  Project Links:
+                </div>
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                  {viewingDetailItem.githubLink && (
+                    <a
+                      href={viewingDetailItem.githubLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-secondary"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        fontSize: '0.85rem',
+                        padding: '8px 14px',
+                        textDecoration: 'none'
+                      }}
+                    >
+                      <FaGithub /> GitHub Repository <FaExternalLinkAlt style={{ fontSize: '0.75rem' }} />
+                    </a>
+                  )}
+                  {viewingDetailItem.liveLink && (
+                    <a
+                      href={viewingDetailItem.liveLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-primary"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        fontSize: '0.85rem',
+                        padding: '8px 14px',
+                        textDecoration: 'none'
+                      }}
+                    >
+                      <FaExternalLinkAlt style={{ fontSize: '0.75rem' }} /> Open Live Demo
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Admin Action Buttons Footer */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                paddingTop: '16px',
+                borderTop: '1px solid var(--border-light)',
+                marginTop: '8px',
+                flexWrap: 'wrap',
+                gap: '12px'
+              }}
+            >
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                {viewingDetailItem._type === 'projects' && (
+                  <>
+                    {viewingDetailItem.status !== 'approved' && (
+                      <button
+                        onClick={() => handleApproveProject(viewingDetailItem.id)}
+                        style={{
+                          background: 'rgba(0, 255, 136, 0.15)',
+                          border: '1px solid var(--accent)',
+                          color: 'var(--accent)',
+                          padding: '8px 16px',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          fontWeight: 600,
+                          fontSize: '0.85rem',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                      >
+                        <FaCheckCircle /> Approve Project
+                      </button>
+                    )}
+                    {viewingDetailItem.status !== 'rejected' && (
+                      <button
+                        onClick={() => handleRejectProject(viewingDetailItem.id)}
+                        style={{
+                          background: 'rgba(239, 68, 68, 0.15)',
+                          border: '1px solid var(--danger)',
+                          color: 'var(--danger)',
+                          padding: '8px 16px',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          fontWeight: 600,
+                          fontSize: '0.85rem',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                      >
+                        <FaTimes /> {viewingDetailItem.status === 'approved' ? 'Revoke Approval / Reject' : 'Reject Project'}
+                      </button>
+                    )}
+                  </>
+                )}
+                {viewingDetailItem._type === 'blogs' && viewingDetailItem.status !== 'approved' && (
+                  <button
+                    onClick={() => {
+                      handleApproveBlog(viewingDetailItem.id);
+                      setViewingDetailItem((prev: any) => ({ ...prev, status: 'approved' }));
+                    }}
+                    style={{
+                      background: 'rgba(0, 255, 136, 0.15)',
+                      border: '1px solid var(--accent)',
+                      color: 'var(--accent)',
+                      padding: '8px 16px',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                      fontSize: '0.85rem',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <FaCheckCircle /> Approve Article
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={() => setViewingDetailItem(null)}
+                className="btn-secondary"
+                style={{ padding: '8px 18px', fontSize: '0.85rem' }}
+              >
+                Close
+              </button>
+            </div>
           </div>
         )}
       </Modal>
