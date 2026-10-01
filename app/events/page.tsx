@@ -335,13 +335,13 @@ export default function EventsPage() {
       toast.error(res.error);
     } else {
       // Mirror into the member's own myRegistrations so it shows on their dashboard.
-      // (Members may update their own document; the server route fans out
-      // intra-college team entries to every member.)
-      if (currentUser && memberProfile?.id && res.data?.id) {
+      // res.data is a DocumentReference (returned by addDoc) so .id is the new reg doc ID.
+      const regDocId = (res.data as any)?.id ?? null;
+      if (currentUser && memberProfile?.id && regDocId) {
         try {
           await updateDoc(doc(db, 'members', memberProfile.id), {
             myRegistrations: arrayUnion({
-              regId: res.data.id,
+              regId: regDocId,
               eventId: selectedEvent.id,
               eventTitle: selectedEvent.title || '',
               type: isSolo ? 'Solo' : 'Team',
@@ -350,9 +350,12 @@ export default function EventsPage() {
               registeredAt: new Date().toISOString(),
             }),
           });
-        } catch (mirrorErr) {
-          console.warn('myRegistrations mirror failed (non-fatal):', mirrorErr);
+        } catch (mirrorErr: any) {
+          // Log clearly — this is what prevents registrations from appearing in the dashboard
+          console.error('myRegistrations mirror failed:', mirrorErr?.code, mirrorErr?.message, mirrorErr);
         }
+      } else {
+        console.warn('myRegistrations mirror skipped:', { hasUser: !!currentUser, memberProfileId: memberProfile?.id, regDocId });
       }
       if (isOpenMode) {
         toast.success('Registration submitted! It is pending admin verification.');

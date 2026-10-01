@@ -66,9 +66,11 @@ export default function MemberDashboardPage() {
     name: '', bio: '', image: '', github: '', linkedin: '',
   });
 
-  // ── auth guard & profile fetch ──────────────────────────────────────────
+  // ── auth guard & profile fetch (live onSnapshot) ────────────────────────
   useEffect(() => {
+    let unsubProfile: (() => void) | null = null;
     let unsubRequests: (() => void) | null = null;
+    let initialFormSet = false;
 
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (!user) {
@@ -76,7 +78,7 @@ export default function MemberDashboardPage() {
         return;
       }
 
-      // Fetch the member document by uid
+      // ── ONE-TIME query to find the member doc ID ──
       const q = query(collection(db, 'members'), where('uid', '==', user.uid));
       const snap = await getDocs(q);
 
@@ -86,19 +88,58 @@ export default function MemberDashboardPage() {
         return;
       }
 
-      const docSnap = snap.docs[0];
-      const data: any = { id: docSnap.id, ...docSnap.data() };
-      setMemberDocId(docSnap.id);
-      setProfile(data);
-      setFormData({
-        name: data.name || '',
-        bio: data.bio || '',
-        image: data.image || '',
-        github: data.github || '',
-        linkedin: data.linkedin || '',
+      const docId = snap.docs[0].id;
+      setMemberDocId(docId);
+
+      // ── LIVE listener on the member doc ──
+      // This means any write to myRegistrations, points, etc. instantly
+      // reflects here without requiring a full page reload.
+      unsubProfile = onSnapshot(doc(db, 'members', docId), async (docSnap) => {
+        if (!docSnap.exists()) return;
+        const data: any = { id: docSnap.id, ...docSnap.data() };
+
+        // Only pre-fill the edit form on the very first load
+        if (!initialFormSet) {
+          initialFormSet = true;
+          setFormData({
+            name: data.name || '',
+            bio: data.bio || '',
+            image: data.image || '',
+            github: data.github || '',
+            linkedin: data.linkedin || '',
+          });
+
+          // ── Monthly reset (run once on load) ──
+          const now = new Date();
+          const currentMonthKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
+          if (data.lastResetMonth && data.lastResetMonth !== currentMonthKey) {
+            try {
+              await updateDoc(doc(db, 'members', docId), {
+                currentMonthPoints: 0,
+                lastResetMonth: currentMonthKey,
+              });
+            } catch (resetErr) {
+              console.warn('Could not reset monthly points:', resetErr);
+            }
+          } else if (!data.lastResetMonth) {
+            try {
+              await updateDoc(doc(db, 'members', docId), {
+                lastResetMonth: currentMonthKey,
+                totalPoints: data.totalPoints ?? 0,
+                currentMonthPoints: data.currentMonthPoints ?? 0,
+              });
+            } catch (_) { /* non-fatal */ }
+          }
+        }
+
+        setProfile(data);
+        setLoading(false);
+      }, (err) => {
+        console.error('Member profile snapshot error:', err);
+        setLoading(false);
       });
 
-      // Listen for pending profile update requests for this member
+      // ── Live listener for pending profile update requests ──
       const reqQuery = query(collection(db, 'profileUpdateRequests'), where('uid', '==', user.uid));
       unsubRequests = onSnapshot(reqQuery, (reqSnap) => {
         const activePending = reqSnap.docs
@@ -106,39 +147,11 @@ export default function MemberDashboardPage() {
           .find((r: any) => r.status === 'pending');
         setPendingRequest(activePending || null);
       });
-
-      // ── Monthly reset: if lastResetMonth != current month, zero out currentMonthPoints ──
-      const now = new Date();
-      const currentMonthKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
-      if (data.lastResetMonth && data.lastResetMonth !== currentMonthKey) {
-        try {
-          await updateDoc(doc(db, 'members', docSnap.id), {
-            currentMonthPoints: 0,
-            lastResetMonth: currentMonthKey,
-          });
-          data.currentMonthPoints = 0;
-          data.lastResetMonth = currentMonthKey;
-        } catch (resetErr) {
-          console.warn('Could not reset monthly points:', resetErr);
-        }
-      } else if (!data.lastResetMonth) {
-        // First time — initialise field
-        try {
-          await updateDoc(doc(db, 'members', docSnap.id), {
-            lastResetMonth: currentMonthKey,
-            totalPoints: data.totalPoints ?? 0,
-            currentMonthPoints: data.currentMonthPoints ?? 0,
-          });
-          data.lastResetMonth = currentMonthKey;
-        } catch (_) { /* non-fatal */ }
-      }
-
-      setProfile(data);
-      setLoading(false);
     });
 
     return () => {
       unsub();
+      if (unsubProfile) unsubProfile();
       if (unsubRequests) unsubRequests();
     };
   }, [router]);
@@ -200,14 +213,52 @@ export default function MemberDashboardPage() {
   }, [profile]);
 
   // ── live: enriched registrations ──────────────────────────────────────
-  // For each entry in profile.myRegistrations, fetch the live event status
-  // and (if completed) the registration score from Firestore.
+  // Primary source: profile.myRegistrations (array on member doc).
+  // Fallback: query all events' registrations by submittedByUid — covers members
+  // who registered before myRegistrations was implemented.
   const loadEnrichedRegs = useCallback(async (regs: any[], uid: string) => {
-    if (!regs || regs.length === 0) { setEnrichedRegs([]); return; }
     setRegsLoading(true);
     try {
+      let stubList: any[] = regs ? [...regs] : [];
+
+      // Fallback: if myRegistrations is empty, scan the registrations subcollection
+      // by querying each event — Firestore doesn't support collectionGroup queries
+      // with security rules on subcollections without a composite index, so instead
+      // we use a collectionGroup query (requires Firestore index but works client-side).
+      if (stubList.length === 0 && uid) {
+        try {
+          const { collectionGroup } = await import('firebase/firestore');
+          const regQuery = query(
+            collectionGroup(db, 'registrations'),
+            where('submittedByUid', '==', uid)
+          );
+          const regSnap = await getDocs(regQuery);
+          // Build stubs from the registration docs themselves
+          stubList = regSnap.docs.map(d => {
+            const rd = d.data();
+            // Extract eventId from the doc path: events/{eventId}/registrations/{regId}
+            const pathParts = d.ref.path.split('/');
+            const derivedEventId = pathParts.length >= 4 ? pathParts[1] : rd.eventId || '';
+            return {
+              regId: d.id,
+              eventId: derivedEventId,
+              eventTitle: rd.eventTitle || '',
+              type: rd.type || 'Solo',
+              role: rd.type === 'Team' ? 'leader' : 'participant',
+              teamName: rd.teamName || '',
+              registeredAt: rd.createdAt || '',
+              _fromFallback: true,
+            };
+          });
+        } catch (fallbackErr) {
+          console.warn('Fallback registration query failed:', fallbackErr);
+        }
+      }
+
+      if (stubList.length === 0) { setEnrichedRegs([]); return; }
+
       const enriched = await Promise.all(
-        [...regs].reverse().map(async (reg: any) => {
+        [...stubList].reverse().map(async (reg: any) => {
           try {
             // 1. Fetch live event document for status + date
             let eventStatus = 'upcoming';
@@ -236,7 +287,9 @@ export default function MemberDashboardPage() {
                   regStatus = rd.status || null;
                   scoredAt = rd.scoredAt || null;
                 }
-              } catch (_) { /* non-fatal — rules allow own-reg read */ }
+              } catch (e) {
+                console.warn('Could not read registration doc for score:', reg.regId, e);
+              }
             }
 
             return { ...reg, eventStatus, eventDate, eventVenue, score, regStatus, scoredAt };

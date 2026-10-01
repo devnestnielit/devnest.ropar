@@ -71,6 +71,14 @@ service cloud.firestore {
       }
     }
 
+    // ── Registrations Collection Group ────────────────────────────────────
+    // Allows collectionGroup queries across all events for a user's own registrations
+    match /{path=**}/registrations/{regId} {
+      allow read: if isAdmin()
+        || (isAuthenticated() && resource.data.submittedByUid == request.auth.uid)
+        || (isAuthenticated() && request.auth.uid in resource.data.participantUids);
+    }
+
     // ── Projects (/projects) ─────────────────────────────────────────────
     // Public read.
     // Any authenticated member can create (they attach submittedByUid).
