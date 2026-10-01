@@ -328,42 +328,34 @@ export default function EventsPage() {
           eventTitle: selectedEvent.title
         };
 
-    const res = await registerForEvent(selectedEvent.id, payload);
-    setSubmittingReg(false);
-
-    if (res.error) {
-      toast.error(res.error);
-    } else {
-      // Mirror into the member's own myRegistrations so it shows on their dashboard.
-      // res.data is a DocumentReference (returned by addDoc) so .id is the new reg doc ID.
-      const regDocId = (res.data as any)?.id ?? null;
-      if (currentUser && memberProfile?.id && regDocId) {
-        try {
-          await updateDoc(doc(db, 'members', memberProfile.id), {
-            myRegistrations: arrayUnion({
-              regId: regDocId,
-              eventId: selectedEvent.id,
-              eventTitle: selectedEvent.title || '',
-              type: isSolo ? 'Solo' : 'Team',
-              role: isSolo ? 'participant' : 'leader',
-              ...(isSolo ? {} : { teamName: teamForm.teamName.trim() }),
-              registeredAt: new Date().toISOString(),
-            }),
-          });
-        } catch (mirrorErr: any) {
-          // Log clearly — this is what prevents registrations from appearing in the dashboard
-          console.error('myRegistrations mirror failed:', mirrorErr?.code, mirrorErr?.message, mirrorErr);
+    try {
+      const res = await fetch('/api/events/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId: selectedEvent.id,
+          submitterUid: currentUser?.uid || null,
+          memberDocId: memberProfile?.id || null,
+          payload,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || 'Registration failed. Please try again.');
+      } else {
+        if (isOpenMode) {
+          toast.success('Registration submitted! It is pending admin verification.');
+        } else {
+          toast.success('Registration successful! You are registered for this event.');
         }
-      } else {
-        console.warn('myRegistrations mirror skipped:', { hasUser: !!currentUser, memberProfileId: memberProfile?.id, regDocId });
+        setIsRegModalOpen(false);
+        setSelectedEvent(null);
       }
-      if (isOpenMode) {
-        toast.success('Registration submitted! It is pending admin verification.');
-      } else {
-        toast.success('Registration successful! You are registered for this event.');
-      }
-      setIsRegModalOpen(false);
-      setSelectedEvent(null);
+    } catch (err: any) {
+      console.error('Registration failed:', err);
+      toast.error('Registration failed. Please try again.');
+    } finally {
+      setSubmittingReg(false);
     }
   };
 

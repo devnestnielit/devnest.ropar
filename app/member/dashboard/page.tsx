@@ -213,54 +213,36 @@ export default function MemberDashboardPage() {
   }, [profile]);
 
   // ── live: enriched registrations ──────────────────────────────────────
-  // Primary source: profile.myRegistrations (array on member doc).
-  // Fallback: query all events' registrations by submittedByUid — covers members
-  // who registered before myRegistrations was implemented.
-  const loadEnrichedRegs = useCallback(async (regs: any[], uid: string) => {
+  // Fetches registrations via server API (/api/member/registrations) which uses
+  // Firebase Admin SDK. This bypasses client Firestore security rules, finds both
+  // solo and team entries by UID or registration number, and auto-heals the member doc.
+  const loadEnrichedRegs = useCallback(async (regs: any[], uid: string, regNumber?: string) => {
     setRegsLoading(true);
     try {
-      let stubList: any[] = regs ? [...regs] : [];
-
-      // Fallback: if myRegistrations is empty, scan the registrations subcollection
-      // by querying each event — Firestore doesn't support collectionGroup queries
-      // with security rules on subcollections without a composite index, so instead
-      // we use a collectionGroup query (requires Firestore index but works client-side).
-      if (stubList.length === 0 && uid) {
+      // 1. Primary: Call server route for 100% reliable results across all events
+      if (uid || regNumber) {
         try {
-          const { collectionGroup } = await import('firebase/firestore');
-          const regQuery = query(
-            collectionGroup(db, 'registrations'),
-            where('submittedByUid', '==', uid)
-          );
-          const regSnap = await getDocs(regQuery);
-          // Build stubs from the registration docs themselves
-          stubList = regSnap.docs.map(d => {
-            const rd = d.data();
-            // Extract eventId from the doc path: events/{eventId}/registrations/{regId}
-            const pathParts = d.ref.path.split('/');
-            const derivedEventId = pathParts.length >= 4 ? pathParts[1] : rd.eventId || '';
-            return {
-              regId: d.id,
-              eventId: derivedEventId,
-              eventTitle: rd.eventTitle || '',
-              type: rd.type || 'Solo',
-              role: rd.type === 'Team' ? 'leader' : 'participant',
-              teamName: rd.teamName || '',
-              registeredAt: rd.createdAt || '',
-              _fromFallback: true,
-            };
-          });
-        } catch (fallbackErr) {
-          console.warn('Fallback registration query failed:', fallbackErr);
+          const res = await fetch(`/api/member/registrations?uid=${encodeURIComponent(uid || '')}&regNumber=${encodeURIComponent(regNumber || '')}`);
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && Array.isArray(data.registrations)) {
+            setEnrichedRegs(data.registrations);
+            return;
+          }
+        } catch (apiErr) {
+          console.warn('Server registrations fetch failed, falling back to client-side:', apiErr);
         }
       }
 
-      if (stubList.length === 0) { setEnrichedRegs([]); return; }
+      // 2. Fallback: Parse profile.myRegistrations client-side if server fetch fails
+      const stubList: any[] = regs ? [...regs] : [];
+      if (stubList.length === 0) {
+        setEnrichedRegs([]);
+        return;
+      }
 
       const enriched = await Promise.all(
         [...stubList].reverse().map(async (reg: any) => {
           try {
-            // 1. Fetch live event document for status + date
             let eventStatus = 'upcoming';
             let eventDate: string | null = null;
             let eventVenue: string | null = null;
@@ -274,7 +256,6 @@ export default function MemberDashboardPage() {
               }
             }
 
-            // 2. Fetch registration doc for score (only if we have both ids)
             let score: number | null = null;
             let regStatus: string | null = null;
             let scoredAt: string | null = null;
@@ -306,7 +287,7 @@ export default function MemberDashboardPage() {
 
   useEffect(() => {
     if (!profile) return;
-    loadEnrichedRegs(profile.myRegistrations || [], profile.uid);
+    loadEnrichedRegs(profile.myRegistrations || [], profile.uid, profile.registrationNumber);
   }, [profile, loadEnrichedRegs]);
 
   // ── derived stats ──────────────────────────────────────────────────────
@@ -669,21 +650,32 @@ export default function MemberDashboardPage() {
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                          {isCompleted && (
+                          {isCompleted ? (
                             <button
-                              style={{
-                                background: 'none', border: 'none', cursor: 'pointer',
-                                color: 'var(--text-dim)', padding: 4, display: 'flex',
-                                transition: 'color 0.2s'
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExpandedReg(isExpanded ? null : (reg.regId || String(i)));
                               }}
-                              title={isExpanded ? 'Collapse' : 'View results'}
+                              className="btn-outline"
+                              style={{
+                                padding: '6px 14px',
+                                fontSize: '0.74rem',
+                                whiteSpace: 'nowrap',
+                                borderColor: isExpanded ? 'var(--accent)' : 'rgba(255,215,0,0.3)',
+                                color: isExpanded ? 'var(--accent)' : 'var(--gold)',
+                                background: isExpanded ? 'rgba(0,255,136,0.06)' : 'rgba(255,215,0,0.05)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                cursor: 'pointer'
+                              }}
                             >
-                              {isExpanded ? <FaChevronUp size={12} /> : <FaChevronDown size={12} />}
+                              <span>{isExpanded ? 'Hide Points' : 'View Points'}</span>
+                              {isExpanded ? <FaChevronUp size={10} /> : <FaChevronDown size={10} />}
                             </button>
-                          )}
-                          {!isCompleted && (
+                          ) : (
                             <Link href="/events" className="btn-outline" style={{ padding: '5px 14px', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>
-                              View
+                              View Event
                             </Link>
                           )}
                         </div>
