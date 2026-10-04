@@ -32,8 +32,8 @@ export default function LeaderboardPage() {
       (snapshot) => {
         const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-        // Include profiles with points or profile data
-        const activeMembers = items.filter((m: any) => m.status === 'approved' || typeof m.currentMonthPoints === 'number' || m.name);
+        // Include approved member profiles
+        const activeMembers = items.filter((m: any) => m.status === 'approved');
 
         // Sort descending by currentMonthPoints, tie-break with totalPoints, then name
         const sorted = activeMembers.sort((a: any, b: any) => {
