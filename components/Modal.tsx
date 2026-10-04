@@ -8,6 +8,7 @@ interface ModalProps {
   onClose: () => void;
   children: React.ReactNode;
   title?: string;
+  maxWidth?: string;
 }
 
 // Reference-counted body scroll lock: multiple stacked modals (e.g. event
@@ -27,7 +28,7 @@ function unlockBodyScroll() {
   }
 }
 
-export default function Modal({ isOpen, onClose, children, title }: ModalProps) {
+export default function Modal({ isOpen, onClose, children, title, maxWidth }: ModalProps) {
   useEffect(() => {
     if (isOpen) {
       lockBodyScroll();
@@ -49,6 +50,7 @@ export default function Modal({ isOpen, onClose, children, title }: ModalProps) 
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             onClick={(e) => e.stopPropagation()}
             className="modal-content"
+            style={{ maxWidth: maxWidth || undefined }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               {title && <h2 style={{ fontSize: '1.5rem', color: 'var(--text-primary)' }}>{title}</h2>}

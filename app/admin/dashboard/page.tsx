@@ -2,16 +2,77 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { collection, getDocs, deleteDoc, doc, updateDoc, addDoc, query, where, increment } from 'firebase/firestore';
+import { collection, getDocs, getDoc, deleteDoc, doc, updateDoc, addDoc, query, where, increment } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import {
   FaSignOutAlt, FaCalendarAlt, FaProjectDiagram, FaPenNib,
   FaUsers, FaEnvelope, FaTrash, FaEdit, FaPlus, FaTrophy, FaCheckCircle, FaTimes, FaUserCheck, FaMedal,
-  FaExternalLinkAlt, FaGithub
+  FaExternalLinkAlt, FaGithub, FaEye, FaFileAlt, FaSyncAlt, FaCopy, FaBookOpen, FaUser, FaClock
 } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 import { seedFirestore } from '@/lib/seedFirestore';
 import Modal from '@/components/Modal';
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function renderBlogContentMarkdown(content: string) {
+  if (!content) return null;
+  return content.split('\n\n').map((paragraph: string, i: number) => {
+    const trimmed = paragraph.trim();
+    if (!trimmed) return null;
+    if (trimmed.startsWith('## ')) {
+      return (
+        <h2 key={i} style={{ fontSize: '1.35rem', marginTop: '1.5rem', marginBottom: '0.6rem', color: 'var(--accent)', fontFamily: 'var(--font-heading)' }}>
+          {trimmed.replace('## ', '')}
+        </h2>
+      );
+    }
+    if (trimmed.startsWith('### ')) {
+      return (
+        <h3 key={i} style={{ fontSize: '1.15rem', marginTop: '1.2rem', marginBottom: '0.5rem', color: 'var(--text-primary)', fontFamily: 'var(--font-heading)' }}>
+          {trimmed.replace('### ', '')}
+        </h3>
+      );
+    }
+    if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+      const items = trimmed.split('\n').map(item => item.replace(/^[-*]\s+/, ''));
+      return (
+        <ul key={i} style={{ paddingLeft: '1.5rem', marginBottom: '1rem', color: 'var(--text-secondary)' }}>
+          {items.map((item, j) => <li key={j} style={{ marginBottom: '0.35rem' }}>{item}</li>)}
+        </ul>
+      );
+    }
+    if (trimmed.match(/^\d+\. /)) {
+      const items = trimmed.split('\n').map(item => item.replace(/^\d+\.\s+/, ''));
+      return (
+        <ol key={i} style={{ paddingLeft: '1.5rem', marginBottom: '1rem', color: 'var(--text-secondary)' }}>
+          {items.map((item, j) => <li key={j} style={{ marginBottom: '0.35rem' }}>{item}</li>)}
+        </ol>
+      );
+    }
+    if (trimmed.startsWith('```')) {
+      const lines = trimmed.split('\n');
+      const code = lines.slice(1, lines[lines.length - 1].startsWith('```') ? -1 : undefined).join('\n');
+      return (
+        <pre key={i} style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border)', overflowX: 'auto', marginBottom: '1rem' }}>
+          <code style={{ fontFamily: 'monospace', fontSize: '0.85rem', color: 'var(--text-primary)' }}>{code}</code>
+        </pre>
+      );
+    }
+    if (/\*\*(.*?)\*\*/.test(trimmed)) {
+      const safeHtml = escapeHtml(trimmed).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+      return <p key={i} style={{ marginBottom: '1rem', lineHeight: 1.65, color: 'var(--text-secondary)' }} dangerouslySetInnerHTML={{ __html: safeHtml }} />;
+    }
+    return <p key={i} style={{ marginBottom: '1rem', lineHeight: 1.65, color: 'var(--text-secondary)' }}>{trimmed}</p>;
+  });
+}
 
 export default function AdminDashboardPage() {
   const [user, setUser] = useState<any>(null);
@@ -34,8 +95,42 @@ export default function AdminDashboardPage() {
   // Project status filter state
   const [projectStatusFilter, setProjectStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
 
-  // Detail inspection modal state (e.g. project description, blog excerpt, contact message)
+  // Detail inspection modal state (e.g. project description, blog excerpt/content, contact message)
   const [viewingDetailItem, setViewingDetailItem] = useState<any | null>(null);
+  const [blogContentTab, setBlogContentTab] = useState<'preview' | 'raw'>('preview');
+  const [fetchingBlogContent, setFetchingBlogContent] = useState(false);
+
+  // Fetch live blog content from Firebase on-demand
+  const handleFetchLiveBlogContent = async (blogId: string) => {
+    setFetchingBlogContent(true);
+    try {
+      const snap = await getDoc(doc(db, 'blogs', blogId));
+      if (snap.exists()) {
+        const liveData = snap.data();
+        const content = liveData.content || liveData.body || liveData.article || liveData.text || '';
+        setViewingDetailItem((prev: any) => (prev ? { ...prev, ...liveData, content } : null));
+        setData((prevData) =>
+          prevData.map((d) => (d.id === blogId ? { ...d, ...liveData, content } : d))
+        );
+        toast.success('Latest article content fetched from Firebase!');
+      } else {
+        toast.error('Blog document not found in Firebase.');
+      }
+    } catch (err: any) {
+      console.error('Error fetching blog content:', err);
+      toast.error(`Failed to fetch from Firebase: ${err?.message || 'Error'}`);
+    } finally {
+      setFetchingBlogContent(false);
+    }
+  };
+
+  const handleOpenBlogInspection = (item: any) => {
+    setViewingDetailItem({ ...item, _type: 'blogs' });
+    setBlogContentTab('preview');
+    if (!item.content) {
+      handleFetchLiveBlogContent(item.id);
+    }
+  };
 
   // Event Registrations & Scoring State
   const [eventRegCounts, setEventRegCounts] = useState<Record<string, number>>({});
@@ -819,7 +914,9 @@ export default function AdminDashboardPage() {
                         {activeTab === 'events' && <th style={{ padding: '16px 24px' }}>Mode</th>}
                         {activeTab === 'events' && <th style={{ padding: '16px 24px' }}>Status</th>}
                         {activeTab === 'events' && <th style={{ padding: '16px 24px' }}>Registrations</th>}
-                        {(activeTab === 'projects' || activeTab === 'blogs') && <th style={{ padding: '16px 24px' }}>Description/Excerpt</th>}
+                        {activeTab === 'projects' && <th style={{ padding: '16px 24px' }}>Description</th>}
+                        {activeTab === 'blogs' && <th style={{ padding: '16px 24px' }}>Excerpt</th>}
+                        {activeTab === 'blogs' && <th style={{ padding: '16px 24px' }}>Uploaded Content</th>}
                         {(activeTab === 'projects' || activeTab === 'blogs') && <th style={{ padding: '16px 24px' }}>Status</th>}
                         {activeTab === 'projects' && <th style={{ padding: '16px 24px' }}>Links</th>}
                         {activeTab === 'members' && <th style={{ padding: '16px 24px' }}>Reg No</th>}
@@ -848,6 +945,11 @@ export default function AdminDashboardPage() {
                             {activeTab === 'projects' && (item.submittedByEmail || item.submittedByName) && (
                               <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 400, marginTop: '2px' }}>
                                 Submitter: {item.submittedByName || ''} {item.submittedByEmail ? `<${item.submittedByEmail}>` : ''}
+                              </div>
+                            )}
+                            {activeTab === 'blogs' && (item.author || item.readTime) && (
+                              <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 400, marginTop: '2px' }}>
+                                By {item.author || 'Anonymous'}{item.readTime ? ` • ${item.readTime}` : ''}
                               </div>
                             )}
                           </td>
@@ -883,9 +985,9 @@ export default function AdminDashboardPage() {
                               </button>
                             </td>
                           )}
-                          {(activeTab === 'projects' || activeTab === 'blogs') && (
+                          {activeTab === 'projects' && (
                             <td
-                              onClick={() => setViewingDetailItem({ ...item, _type: activeTab })}
+                              onClick={() => setViewingDetailItem({ ...item, _type: 'projects' })}
                               title="Click to view full description & details"
                               style={{
                                 padding: '16px 24px',
@@ -922,7 +1024,7 @@ export default function AdminDashboardPage() {
                                     flex: 1
                                   }}
                                 >
-                                  {item.description || item.excerpt || '—'}
+                                  {item.description || '—'}
                                 </span>
                                 <span
                                   style={{
@@ -939,6 +1041,106 @@ export default function AdminDashboardPage() {
                                 >
                                   Open ↗
                                 </span>
+                              </div>
+                            </td>
+                          )}
+                          {activeTab === 'blogs' && (
+                            <td
+                              onClick={() => handleOpenBlogInspection(item)}
+                              title="Click to view article excerpt & verification details"
+                              style={{
+                                padding: '16px 24px',
+                                maxWidth: '240px',
+                                cursor: 'pointer',
+                                userSelect: 'none'
+                              }}
+                            >
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px',
+                                  color: 'var(--text-muted)',
+                                  transition: 'all 0.2s ease',
+                                  padding: '4px 8px',
+                                  borderRadius: '6px',
+                                  margin: '-4px -8px'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.color = 'var(--text-primary)';
+                                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.color = 'var(--text-muted)';
+                                  e.currentTarget.style.background = 'transparent';
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    flex: 1
+                                  }}
+                                >
+                                  {item.excerpt || item.description || '—'}
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: '0.72rem',
+                                    color: 'var(--accent)',
+                                    background: 'var(--accent-glow)',
+                                    border: '1px solid rgba(0, 255, 136, 0.3)',
+                                    padding: '2px 7px',
+                                    borderRadius: '4px',
+                                    whiteSpace: 'nowrap',
+                                    flexShrink: 0,
+                                    fontWeight: 600
+                                  }}
+                                >
+                                  Open ↗
+                                </span>
+                              </div>
+                            </td>
+                          )}
+                          {activeTab === 'blogs' && (
+                            <td style={{ padding: '16px 24px', maxWidth: '280px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span
+                                  style={{
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    flex: 1,
+                                    fontSize: '0.85rem',
+                                    color: item.content ? 'var(--text-secondary)' : 'var(--text-dim)'
+                                  }}
+                                  title={item.content ? item.content.slice(0, 200) : 'No content loaded yet'}
+                                >
+                                  {item.content ? item.content.replace(/[#*`_~-]/g, '').slice(0, 35) + '...' : '(No content)'}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenBlogInspection(item)}
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 600,
+                                    color: 'var(--accent)',
+                                    background: 'var(--accent-glow)',
+                                    border: '1px solid rgba(0, 255, 136, 0.35)',
+                                    padding: '4px 9px',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap',
+                                    transition: 'all 0.2s'
+                                  }}
+                                  title="Inspect full uploaded content to verify before approving"
+                                >
+                                  <FaFileAlt style={{ fontSize: '0.75rem' }} /> Verify Content ↗
+                                </button>
                               </div>
                             </td>
                           )}
@@ -1135,6 +1337,15 @@ export default function AdminDashboardPage() {
                                 </button>
                               )}
                             </>
+                          )}
+                          {activeTab === 'blogs' && (
+                            <button
+                              onClick={() => handleOpenBlogInspection(item)}
+                              style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', marginRight: '12px', fontSize: '1.1rem' }}
+                              title="Verify Article Content & Details"
+                            >
+                              <FaEye />
+                            </button>
                           )}
                           {activeTab === 'blogs' && item.status !== 'approved' && (
                             <button
@@ -1683,11 +1894,12 @@ export default function AdminDashboardPage() {
         )}
       </Modal>
 
-      {/* Item Details / Full Description Inspection Modal */}
+      {/* Item Details / Full Description & Content Inspection Modal */}
       <Modal
         isOpen={!!viewingDetailItem}
         onClose={() => setViewingDetailItem(null)}
         title={viewingDetailItem?.title || viewingDetailItem?.name || 'Item Details'}
+        maxWidth={viewingDetailItem?._type === 'blogs' ? '820px' : '620px'}
       >
         {viewingDetailItem && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -1703,6 +1915,16 @@ export default function AdminDashboardPage() {
                   Status: {viewingDetailItem.status === 'approved' ? 'Approved' : 'Pending Verification'}
                 </span>
               )}
+              {viewingDetailItem._type === 'blogs' && viewingDetailItem.author && (
+                <span className="badge badge-blue" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                  <FaUser style={{ fontSize: '0.75rem' }} /> {viewingDetailItem.author}
+                </span>
+              )}
+              {viewingDetailItem._type === 'blogs' && viewingDetailItem.readTime && (
+                <span className="badge badge-accent" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                  <FaClock style={{ fontSize: '0.75rem' }} /> {viewingDetailItem.readTime}
+                </span>
+              )}
               {viewingDetailItem.category && (
                 <span className="badge badge-blue">Category: {viewingDetailItem.category}</span>
               )}
@@ -1711,7 +1933,45 @@ export default function AdminDashboardPage() {
                   Submitted: {new Date(viewingDetailItem.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                 </span>
               )}
+              {viewingDetailItem._type === 'blogs' && viewingDetailItem.slug && (
+                <a
+                  href={`/blog/${viewingDetailItem.slug}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '0.75rem',
+                    color: 'var(--accent)',
+                    textDecoration: 'none',
+                    background: 'var(--accent-glow)',
+                    padding: '3px 9px',
+                    borderRadius: '6px',
+                    border: '1px solid rgba(0, 255, 136, 0.3)',
+                    marginLeft: 'auto',
+                    fontWeight: 600
+                  }}
+                  title="Preview article on the site (admins can view pending articles)"
+                >
+                  Live Preview <FaExternalLinkAlt style={{ fontSize: '0.7rem' }} />
+                </a>
+              )}
             </div>
+
+            {/* Thumbnail Preview for Blogs */}
+            {viewingDetailItem._type === 'blogs' && viewingDetailItem.thumbnail && (
+              <div style={{ borderRadius: '10px', overflow: 'hidden', border: '1px solid var(--border)', maxHeight: '160px' }}>
+                <img
+                  src={viewingDetailItem.thumbnail}
+                  alt={viewingDetailItem.title}
+                  style={{ width: '100%', height: '160px', objectFit: 'cover' }}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+              </div>
+            )}
 
             {/* Submitter Info Card (for projects) */}
             {viewingDetailItem._type === 'projects' && (viewingDetailItem.submittedByName || viewingDetailItem.submittedByEmail || viewingDetailItem.registrationNumber) && (
@@ -1740,35 +2000,230 @@ export default function AdminDashboardPage() {
               </div>
             )}
 
-            {/* Full Description Box */}
-            <div>
-              <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>
-                {viewingDetailItem._type === 'contacts' ? 'Full Message:' : 'Full Description:'}
+            {/* Excerpt Box for Blogs */}
+            {viewingDetailItem._type === 'blogs' && (
+              <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '10px', padding: '14px 16px' }}>
+                <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-dim)', marginBottom: '6px', fontWeight: 600 }}>
+                  Short Excerpt / Summary
+                </div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.6 }}>
+                  {viewingDetailItem.excerpt || viewingDetailItem.description || 'No excerpt provided.'}
+                </div>
               </div>
-              <div
-                style={{
-                  background: 'var(--bg-primary)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '10px',
-                  padding: '16px',
-                  color: 'var(--text-secondary)',
-                  fontSize: '0.92rem',
-                  lineHeight: 1.65,
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                  maxHeight: '350px',
-                  overflowY: 'auto'
-                }}
-              >
-                {viewingDetailItem.description || viewingDetailItem.excerpt || viewingDetailItem.message || viewingDetailItem.content || 'No description provided.'}
+            )}
+
+            {/* Uploaded Content (Article Body) for Blogs */}
+            {viewingDetailItem._type === 'blogs' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                      Uploaded Article Content
+                    </span>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--accent)', background: 'var(--accent-glow)', border: '1px solid rgba(0, 255, 136, 0.3)', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>
+                      Main Verification
+                    </span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
+                      {viewingDetailItem.content ? `${viewingDetailItem.content.trim().split(/\s+/).filter(Boolean).length} words • ${viewingDetailItem.content.length} chars` : '0 words'}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    {/* View Mode Switcher */}
+                    <div style={{ display: 'inline-flex', background: 'var(--bg-secondary)', padding: '3px', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                      <button
+                        type="button"
+                        onClick={() => setBlogContentTab('preview')}
+                        style={{
+                          padding: '4px 10px',
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          background: blogContentTab === 'preview' ? 'var(--accent)' : 'transparent',
+                          color: blogContentTab === 'preview' ? '#000' : 'var(--text-muted)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        <FaEye style={{ fontSize: '0.75rem' }} /> Formatted Preview
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBlogContentTab('raw')}
+                        style={{
+                          padding: '4px 10px',
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          background: blogContentTab === 'raw' ? 'var(--accent)' : 'transparent',
+                          color: blogContentTab === 'raw' ? '#000' : 'var(--text-muted)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        <FaFileAlt style={{ fontSize: '0.75rem' }} /> Raw Markdown
+                      </button>
+                    </div>
+
+                    {/* Refresh from Firebase Button */}
+                    <button
+                      type="button"
+                      onClick={() => handleFetchLiveBlogContent(viewingDetailItem.id)}
+                      disabled={fetchingBlogContent}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        color: 'var(--accent)',
+                        background: 'rgba(0, 255, 136, 0.1)',
+                        border: '1px solid rgba(0, 255, 136, 0.3)',
+                        padding: '5px 10px',
+                        borderRadius: '8px',
+                        cursor: fetchingBlogContent ? 'wait' : 'pointer',
+                        transition: 'all 0.2s'
+                      }}
+                      title="Fetch latest document content directly from Firebase Firestore"
+                    >
+                      <FaSyncAlt style={{ fontSize: '0.7rem', animation: fetchingBlogContent ? 'spin 1s linear infinite' : 'none' }} />
+                      {fetchingBlogContent ? 'Fetching...' : 'Fetch from Firebase'}
+                    </button>
+
+                    {/* Copy Button */}
+                    {viewingDetailItem.content && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(viewingDetailItem.content);
+                          toast.success('Article content copied to clipboard!');
+                        }}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontSize: '0.75rem',
+                          color: 'var(--text-muted)',
+                          background: 'var(--bg-secondary)',
+                          border: '1px solid var(--border)',
+                          padding: '5px 9px',
+                          borderRadius: '8px',
+                          cursor: 'pointer'
+                        }}
+                        title="Copy raw markdown content"
+                      >
+                        <FaCopy style={{ fontSize: '0.7rem' }} /> Copy
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Content Box */}
+                {fetchingBlogContent ? (
+                  <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: '10px', padding: '36px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                    <FaSyncAlt style={{ animation: 'spin 1s linear infinite', marginBottom: '8px', fontSize: '1.2rem', color: 'var(--accent)' }} />
+                    <div>Fetching article content from Firebase...</div>
+                  </div>
+                ) : viewingDetailItem.content ? (
+                  blogContentTab === 'preview' ? (
+                    <div
+                      style={{
+                        background: 'var(--bg-primary)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '10px',
+                        padding: '20px',
+                        maxHeight: '420px',
+                        overflowY: 'auto',
+                        lineHeight: 1.7
+                      }}
+                    >
+                      {renderBlogContentMarkdown(viewingDetailItem.content)}
+                    </div>
+                  ) : (
+                    <pre
+                      style={{
+                        background: 'var(--bg-primary)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '10px',
+                        padding: '16px',
+                        maxHeight: '420px',
+                        overflowY: 'auto',
+                        fontSize: '0.85rem',
+                        fontFamily: 'monospace',
+                        color: 'var(--text-primary)',
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word',
+                        margin: 0
+                      }}
+                    >
+                      {viewingDetailItem.content}
+                    </pre>
+                  )
+                ) : (
+                  <div
+                    style={{
+                      background: 'rgba(234, 179, 8, 0.08)',
+                      border: '1px dashed rgba(234, 179, 8, 0.4)',
+                      borderRadius: '10px',
+                      padding: '24px',
+                      textAlign: 'center'
+                    }}
+                  >
+                    <p style={{ margin: '0 0 12px 0', color: 'var(--warning)', fontSize: '0.9rem' }}>
+                      ⚠️ No content found in this Firebase document.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => handleFetchLiveBlogContent(viewingDetailItem.id)}
+                      className="btn-secondary"
+                      style={{ fontSize: '0.8rem', padding: '6px 14px' }}
+                    >
+                      <FaSyncAlt /> Try Fetching from Firebase
+                    </button>
+                  </div>
+                )}
               </div>
-            </div>
+            )}
+
+            {/* Full Description Box (for contacts & projects) */}
+            {viewingDetailItem._type !== 'blogs' && (
+              <div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>
+                  {viewingDetailItem._type === 'contacts' ? 'Full Message:' : 'Full Description:'}
+                </div>
+                <div
+                  style={{
+                    background: 'var(--bg-primary)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '10px',
+                    padding: '16px',
+                    color: 'var(--text-secondary)',
+                    fontSize: '0.92rem',
+                    lineHeight: 1.65,
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    maxHeight: '350px',
+                    overflowY: 'auto'
+                  }}
+                >
+                  {viewingDetailItem.description || viewingDetailItem.message || 'No description provided.'}
+                </div>
+              </div>
+            )}
 
             {/* Tech Stack / Tags */}
             {viewingDetailItem.tags && viewingDetailItem.tags.length > 0 && (
               <div>
                 <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>
-                  Technologies / Tags:
+                  Tags:
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                   {viewingDetailItem.tags.map((t: string, i: number) => (
@@ -1896,28 +2351,49 @@ export default function AdminDashboardPage() {
                     )}
                   </>
                 )}
-                {viewingDetailItem._type === 'blogs' && viewingDetailItem.status !== 'approved' && (
-                  <button
-                    onClick={() => {
-                      handleApproveBlog(viewingDetailItem.id);
-                      setViewingDetailItem((prev: any) => ({ ...prev, status: 'approved' }));
-                    }}
-                    style={{
-                      background: 'rgba(0, 255, 136, 0.15)',
-                      border: '1px solid var(--accent)',
-                      color: 'var(--accent)',
-                      padding: '8px 16px',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      fontWeight: 600,
-                      fontSize: '0.85rem',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px'
-                    }}
-                  >
-                    <FaCheckCircle /> Approve Article
-                  </button>
+                {viewingDetailItem._type === 'blogs' && (
+                  <>
+                    {viewingDetailItem.status !== 'approved' && (
+                      <button
+                        onClick={() => {
+                          handleApproveBlog(viewingDetailItem.id);
+                          setViewingDetailItem((prev: any) => ({ ...prev, status: 'approved' }));
+                        }}
+                        style={{
+                          background: 'rgba(0, 255, 136, 0.15)',
+                          border: '1px solid var(--accent)',
+                          color: 'var(--accent)',
+                          padding: '8px 16px',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          fontWeight: 600,
+                          fontSize: '0.85rem',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                      >
+                        <FaCheckCircle /> Approve Article
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        const itemToEdit = { ...viewingDetailItem };
+                        setViewingDetailItem(null);
+                        handleOpenEditModal(itemToEdit);
+                      }}
+                      className="btn-secondary"
+                      style={{
+                        padding: '8px 16px',
+                        fontSize: '0.85rem',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      <FaEdit /> Edit Article
+                    </button>
+                  </>
                 )}
               </div>
               <button
