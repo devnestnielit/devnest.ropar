@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { collection, getDocs, getDoc, deleteDoc, doc, updateDoc, addDoc, query, where, increment } from 'firebase/firestore';
+import { collection, getDocs, getDoc, deleteDoc, doc, updateDoc, addDoc, setDoc, query, where, increment } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import {
   FaSignOutAlt, FaCalendarAlt, FaProjectDiagram, FaPenNib,
@@ -81,6 +81,29 @@ export default function AdminDashboardPage() {
   const [data, setData] = useState<any[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
   const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [syncingProfiles, setSyncingProfiles] = useState(false);
+
+  const handleSyncProfiles = async () => {
+    setSyncingProfiles(true);
+    try {
+      const idToken = await auth.currentUser?.getIdToken(true);
+      const res = await fetch('/api/admin/sync-profiles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` }
+      });
+      const resData = await res.json();
+      if (!res.ok) {
+        toast.error(resData.error || 'Failed to sync profiles');
+      } else {
+        toast.success(`Successfully synced ${resData.syncedCount || 0} members to public leaderboard!`);
+        fetchData(activeTab);
+      }
+    } catch (err: any) {
+      toast.error('Sync error: ' + (err?.message || 'Unknown'));
+    } finally {
+      setSyncingProfiles(false);
+    }
+  };
 
   // Modal & Form state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -768,9 +791,43 @@ export default function AdminDashboardPage() {
 
       if (editingItem) {
         await updateDoc(doc(db, activeTab, editingItem.id), { ...submitData, updatedAt: new Date().toISOString() });
+        if (activeTab === 'members') {
+          try {
+            await setDoc(doc(db, 'memberProfiles', editingItem.id), {
+              name: submitData.name,
+              registrationNumber: submitData.registrationNumber || '',
+              image: submitData.image || '',
+              bio: submitData.bio || '',
+              github: submitData.github || '',
+              linkedin: submitData.linkedin || '',
+              status: submitData.status || 'approved',
+              updatedAt: new Date().toISOString(),
+            }, { merge: true });
+          } catch (profileErr) {
+            console.warn('memberProfiles sync failed (non-fatal):', profileErr);
+          }
+        }
         toast.success('Updated successfully!');
       } else {
-        await addDoc(collection(db, activeTab), { ...submitData, createdAt: new Date().toISOString() });
+        const newRef = await addDoc(collection(db, activeTab), { ...submitData, createdAt: new Date().toISOString() });
+        if (activeTab === 'members' && (submitData.status === 'approved' || !submitData.status)) {
+          try {
+            await setDoc(doc(db, 'memberProfiles', newRef.id), {
+              name: submitData.name,
+              registrationNumber: submitData.registrationNumber || '',
+              image: submitData.image || '',
+              bio: submitData.bio || '',
+              github: submitData.github || '',
+              linkedin: submitData.linkedin || '',
+              status: 'approved',
+              currentMonthPoints: Number(submitData.currentMonthPoints) || 0,
+              totalPoints: Number(submitData.totalPoints) || 0,
+              createdAt: new Date().toISOString(),
+            }, { merge: true });
+          } catch (profileErr) {
+            console.warn('memberProfiles creation failed (non-fatal):', profileErr);
+          }
+        }
         toast.success('Added successfully!');
       }
 
@@ -844,11 +901,24 @@ export default function AdminDashboardPage() {
           <h1 style={{ fontSize: '2.5rem', fontWeight: 800, textTransform: 'capitalize' }}>
             {activeTab === 'profileUpdateRequests' ? 'Member Profile Updates' : `Manage ${activeTab}`}
           </h1>
-          {activeTab !== 'contacts' && activeTab !== 'profileUpdateRequests' && activeTab !== 'leaderboard' && (
-            <button className="btn-primary" style={{ padding: '10px 20px', borderRadius: '8px' }} onClick={handleOpenAddModal}>
-              <FaPlus /> Add New
-            </button>
-          )}
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            {(activeTab === 'members' || activeTab === 'leaderboard') && (
+              <button
+                className="btn-outline"
+                style={{ padding: '9px 16px', borderRadius: '8px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px' }}
+                onClick={handleSyncProfiles}
+                disabled={syncingProfiles}
+                title="Sync member registration numbers, points, and profiles to the public leaderboard"
+              >
+                <FaSyncAlt className={syncingProfiles ? 'spin' : ''} /> {syncingProfiles ? 'Syncing...' : 'Sync Public Leaderboard'}
+              </button>
+            )}
+            {activeTab !== 'contacts' && activeTab !== 'profileUpdateRequests' && activeTab !== 'leaderboard' && (
+              <button className="btn-primary" style={{ padding: '10px 20px', borderRadius: '8px' }} onClick={handleOpenAddModal}>
+                <FaPlus /> Add New
+              </button>
+            )}
+          </div>
         </div>
 
         {activeTab === 'projects' && (

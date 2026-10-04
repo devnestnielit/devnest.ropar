@@ -752,7 +752,7 @@ export default function EventsPage() {
                 </div>
               </>
             )}
-
+            
             {/* TEAM REGISTRATION */}
             {selectedEvent.type === 'Team' && (
               <>

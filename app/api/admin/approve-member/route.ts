@@ -99,16 +99,16 @@ export async function POST(req: NextRequest) {
             approvedAt: new Date().toISOString(),
         });
 
-        // 5. Publish public-safe fields to memberProfiles
-        // BUG-43: registrationNumber is institutional PII — never publish it
-        // to the publicly-readable memberProfiles collection.
+        // 5. Publish profile to memberProfiles (used by public leaderboard and profiles)
         await adminDb.collection('memberProfiles').doc(memberId).set({
             uid: finalUid,
             name: data.name || '',
+            registrationNumber: data.registrationNumber || '',
             image: data.image || '',
             bio: data.bio || '',
             github: data.github || '',
             linkedin: data.linkedin || '',
+            status: 'approved',
             currentMonthPoints: data.currentMonthPoints || 0,
             totalPoints: data.totalPoints || 0,
             approvedAt: new Date().toISOString(),
