@@ -84,7 +84,9 @@ export default function MemberDashboardPage() {
 
       if (snap.empty) {
         toast.error('No approved profile linked to this account. Contact an admin.');
-        setLoading(false);
+        await signOut(auth);
+        localStorage.removeItem('devnest_admin');
+        router.push('/member/login');
         return;
       }
 
@@ -95,7 +97,13 @@ export default function MemberDashboardPage() {
       // This means any write to myRegistrations, points, etc. instantly
       // reflects here without requiring a full page reload.
       unsubProfile = onSnapshot(doc(db, 'members', docId), async (docSnap) => {
-        if (!docSnap.exists()) return;
+        if (!docSnap.exists()) {
+          toast.error('Your member profile has been removed.');
+          await signOut(auth);
+          localStorage.removeItem('devnest_admin');
+          router.push('/member/login');
+          return;
+        }
         const data: any = { id: docSnap.id, ...docSnap.data() };
 
         // Only pre-fill the edit form on the very first load

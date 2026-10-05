@@ -58,7 +58,7 @@ export default function Footer() {
             <h3 style={{ fontSize: '1.1rem', marginBottom: '1.2rem', color: 'var(--text-primary)' }}>Connect</h3>
             <div style={{ display: 'flex', gap: '1rem' }}>
               <a href="https://github.com/DevNest-NIELIT-Ropar" style={{ color: 'var(--text-muted)', fontSize: '1.5rem', transition: 'color 0.2s' }}><FaGithub /></a>
-              <a href="https://www.linkedin.com/company/145234881/admin/dashboard/" style={{ color: 'var(--text-muted)', fontSize: '1.5rem', transition: 'color 0.2s' }}><FaLinkedin /></a>
+              <a href="https://www.linkedin.com/company/devnest-ropar" style={{ color: 'var(--text-muted)', fontSize: '1.5rem', transition: 'color 0.2s' }}><FaLinkedin /></a>
               <a href="https://chat.whatsapp.com/ExpQEovO5YUEt2KKdBXOu9" style={{ color: 'var(--text-muted)', fontSize: '1.5rem', transition: 'color 0.2s' }}><FaWhatsapp /></a>
               <a href="https://www.instagram.com/devnest_nielitropar" style={{ color: 'var(--text-muted)', fontSize: '1.5rem', transition: 'color 0.2s' }}><FaInstagram /></a>
               <a href="mailto:devnest.ropar@nielit.ac.in" style={{ color: 'var(--text-muted)', fontSize: '1.5rem', transition: 'color 0.2s' }}><FaEnvelope /></a>

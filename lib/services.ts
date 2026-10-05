@@ -10,7 +10,7 @@ import {
   onSnapshot,
   FirestoreError
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { db, auth } from './firebase';
 
 // Helper to handle Firestore operations with try/catch
 const handleOp = async <T>(op: () => Promise<T>): Promise<{ data: T | null; error: string | null }> => {
@@ -150,7 +150,22 @@ export const updateMember = async (id: string, member: any) => {
 };
 
 export const deleteMember = async (id: string) => {
-  return handleOp(() => deleteDoc(doc(db, 'members', id)));
+  return handleOp(async () => {
+    const idToken = await auth.currentUser?.getIdToken(true);
+    const res = await fetch('/api/admin/delete-member', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+      },
+      body: JSON.stringify({ memberId: id }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to delete member');
+    }
+    return res.json();
+  });
 };
 
 // --- CONTACTS ---

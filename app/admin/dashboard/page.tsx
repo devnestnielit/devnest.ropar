@@ -262,28 +262,39 @@ export default function AdminDashboardPage() {
     setIsDeleting(true);
     try {
       // Force refresh admin token to ensure latest custom claims are sent to Firestore
-      await auth.currentUser?.getIdToken(true);
+      const idToken = await auth.currentUser?.getIdToken(true);
 
       const { id, collectionName } = deleteTarget;
 
-      // 1. Delete main document
-      await deleteDoc(doc(db, collectionName, id));
-
-      // 2. Cascade delete for related documents
       if (collectionName === 'members') {
-        try {
-          await deleteDoc(doc(db, 'memberProfiles', id));
-        } catch (_) {}
-      } else if (collectionName === 'events') {
-        try {
-          const regSnap = await getDocs(collection(db, 'events', id, 'registrations'));
-          await Promise.all(regSnap.docs.map(d => deleteDoc(d.ref)));
-        } catch (_) {}
+        const res = await fetch('/api/admin/delete-member', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({ memberId: id }),
+        });
+        const result = await res.json();
+        if (!res.ok) {
+          throw new Error(result.error || 'Failed to delete member and authentication account');
+        }
+      } else {
+        // 1. Delete main document
+        await deleteDoc(doc(db, collectionName, id));
+
+        // 2. Cascade delete for related documents
+        if (collectionName === 'events') {
+          try {
+            const regSnap = await getDocs(collection(db, 'events', id, 'registrations'));
+            await Promise.all(regSnap.docs.map(d => deleteDoc(d.ref)));
+          } catch (_) {}
+        }
       }
 
       toast.success(`${deleteTarget.name} deleted successfully!`);
       setDeleteTarget(null);
-      fetchData(collectionName);
+      fetchData(activeTab);
     } catch (error: any) {
       console.error('Delete error for', deleteTarget, error);
       toast.error(`Delete failed: ${error?.message || 'Permission denied. Ensure your admin custom claim is set.'}`);
@@ -1490,7 +1501,7 @@ export default function AdminDashboardPage() {
                             </button>
                           )}
                           <button
-                            onClick={() => confirmDelete(item.id, item.title || item.name || item.memberName || item.subject || 'this item', activeTab)}
+                            onClick={() => confirmDelete(item.id, item.title || item.name || item.memberName || item.subject || 'this item', activeTab === 'leaderboard' ? 'members' : activeTab)}
                             style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontSize: '1.1rem' }}
                             title="Delete Item"
                           >
@@ -1526,7 +1537,9 @@ export default function AdminDashboardPage() {
             Are you sure you want to permanently delete <strong style={{ color: 'var(--danger)' }}>&quot;{deleteTarget?.name}&quot;</strong> from <code style={{ color: 'var(--accent)' }}>{deleteTarget?.collectionName}</code>?
           </p>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginBottom: '24px' }}>
-            This action cannot be undone. Associated data and subcollections will also be deleted.
+            {deleteTarget?.collectionName === 'members'
+              ? 'This action cannot be undone. Their member profile and Firebase Authentication login account will both be permanently deleted.'
+              : 'This action cannot be undone. Associated data and subcollections will also be deleted.'}
           </p>
           <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
             <button
