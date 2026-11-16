@@ -65,7 +65,7 @@ export default function Footer() {
             </div>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '1.5rem' }}>
               NIELIT Main Campus<br />
-              Chhota Phull, Rupnagar (Ropar)<br />
+              Bada Phull, Rupnagar (Ropar)<br />
               Punjab, 140001
             </p>
           </div>

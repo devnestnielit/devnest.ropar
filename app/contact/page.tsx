@@ -113,7 +113,7 @@ export default function ContactPage() {
           <div style={{ background: 'var(--bg-card)', padding: '1.5rem', borderRadius: '16px', border: '1px solid var(--border)', marginBottom: '2rem' }}>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: 1.8 }}>
               📍 NIELIT Main Campus<br />
-              Chhota Phull, Rupnagar (Ropar)<br />
+              Bada Phull, Rupnagar (Ropar)<br />
               Punjab, 140001<br /><br />
               📧 devnest.ropar@nielit.ac.in<br />
               ⏰ Mon–Sat, 10am–6pm
