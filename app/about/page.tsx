@@ -222,7 +222,7 @@ export default function AboutPage() {
             <div style={{ width: '150px', height: '150px', borderRadius: '50%', background: 'var(--border-light)', overflow: 'hidden', flexShrink: 0, margin: '0 auto' }}>
               <img
                 src="/team/nikhil-gupta.png"
-                alt="Naman Singla - Club Lead &amp; Full Stack Architect"
+                alt="Nikhil Gupta - Tech Co-Executive &amp; Full Stack Architect"
                 width={150}
                 height={150}
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
@@ -233,9 +233,9 @@ export default function AboutPage() {
             </div>
             <div style={{ flex: 1, textAlign: 'center' }}>
               <h3 style={{ fontSize: '1.5rem', color: 'var(--text-primary)', marginBottom: '4px' }}>Nikhil Gupta</h3>
-              <p style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: '1rem', fontSize: '0.9rem' }}>Coordinator</p>
+              <p style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: '1rem', fontSize: '0.9rem' }}>Co-Tech Executive</p>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
-                &quot;Building collaborative spaces where developers turn ambitious ideas into production-ready software.&quot;
+                &quot;Bridging ideas and technology to empower developers and turn innovation into impactful solutions.&quot;
               </p>
             </div>
           </motion.div>
@@ -244,7 +244,7 @@ export default function AboutPage() {
             <div style={{ width: '150px', height: '150px', borderRadius: '50%', background: 'var(--border-light)', overflow: 'hidden', flexShrink: 0, margin: '0 auto' }}>
               <img
                 src="/team/arghadeep.png"
-                alt="Naman Singla - Club Lead &amp; Full Stack Architect"
+                alt="Arghadeep - Project and innovation Lead &amp; Full Stack Architect"
                 width={150}
                 height={150}
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
@@ -254,10 +254,10 @@ export default function AboutPage() {
               />
             </div>
             <div style={{ flex: 1, textAlign: 'center' }}>
-              <h3 style={{ fontSize: '1.5rem', color: 'var(--text-primary)', marginBottom: '4px' }}>Nikhil Gupta</h3>
-              <p style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: '1rem', fontSize: '0.9rem' }}>Coordinator</p>
+              <h3 style={{ fontSize: '1.5rem', color: 'var(--text-primary)', marginBottom: '4px' }}>Arghadeep</h3>
+              <p style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: '1rem', fontSize: '0.9rem' }}>Project and Innovation Manager</p>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
-                &quot;Building collaborative spaces where developers turn ambitious ideas into production-ready software.&quot;
+                &quot;Bridging ideas and technology to empower developers and turn innovation into impactful solutions.&quot;
               </p>
             </div>
           </motion.div>
