@@ -7,7 +7,8 @@ import { auth, db } from '@/lib/firebase';
 import {
   FaSignOutAlt, FaCalendarAlt, FaProjectDiagram, FaPenNib,
   FaUsers, FaEnvelope, FaTrash, FaEdit, FaPlus, FaTrophy, FaCheckCircle, FaTimes, FaUserCheck, FaMedal,
-  FaExternalLinkAlt, FaGithub, FaEye, FaFileAlt, FaSyncAlt, FaCopy, FaBookOpen, FaUser, FaClock
+  FaExternalLinkAlt, FaGithub, FaEye, FaFileAlt, FaSyncAlt, FaCopy, FaBookOpen, FaUser, FaClock,
+  FaLinkedin, FaIdCard, FaSearch
 } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 import { seedFirestore } from '@/lib/seedFirestore';
@@ -82,6 +83,8 @@ export default function AdminDashboardPage() {
   const [dataLoading, setDataLoading] = useState(false);
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [syncingProfiles, setSyncingProfiles] = useState(false);
+  const [searchMemberQuery, setSearchMemberQuery] = useState('');
+  const [pendingMembersCount, setPendingMembersCount] = useState<number>(0);
 
   const handleSyncProfiles = async () => {
     setSyncingProfiles(true);
@@ -195,6 +198,12 @@ export default function AdminDashboardPage() {
         localStorage.setItem('devnest_admin', 'true');
         setLoading(false);
         fetchData('events');
+
+        // Preload pending members count for the sidebar badge
+        getDocs(collection(db, 'members')).then((snap) => {
+          const pending = snap.docs.filter((d) => (d.data().status || 'pending') === 'pending');
+          setPendingMembersCount(pending.length);
+        }).catch((err) => console.warn('Could not preload pending members count:', err));
       } catch (err) {
         console.error('Admin token verification error:', err);
         await signOut(auth);
@@ -217,6 +226,25 @@ export default function AdminDashboardPage() {
         const items = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
         items.sort((a: any, b: any) => (Number(b.currentMonthPoints) || 0) - (Number(a.currentMonthPoints) || 0));
         setData(items);
+      } else if (collectionName === 'members') {
+        // Members tab: ONLY pending requests waiting for verification
+        // After approval or rejection, members will no longer appear here.
+        const querySnapshot = await getDocs(collection(db, 'members'));
+        const allItems = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        const pending = allItems.filter((d: any) => (d.status || 'pending') === 'pending');
+        pending.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        setData(pending);
+        setPendingMembersCount(pending.length);
+      } else if (collectionName === 'registeredMembers') {
+        // Registered Members tab: ONLY approved members
+        const querySnapshot = await getDocs(collection(db, 'members'));
+        const allItems = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        const approved = allItems.filter((d: any) => d.status === 'approved');
+        approved.sort((a: any, b: any) => (a.name || '').localeCompare(b.name || ''));
+        setData(approved);
+        // Also update pending count
+        const pendingCount = allItems.filter((d: any) => (d.status || 'pending') === 'pending').length;
+        setPendingMembersCount(pendingCount);
       } else {
         const querySnapshot = await getDocs(collection(db, collectionName));
         const items = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -317,7 +345,7 @@ export default function AdminDashboardPage() {
 
   // Approve a pending member
   const handleApproveMember = async (memberId: string) => {
-    if (!window.confirm('Approve this member? This will activate their login account.')) return;
+    if (!window.confirm('Approve this member? This will activate their login account and add them to Registered Members.')) return;
 
     setApprovingId(memberId);
     try {
@@ -333,13 +361,38 @@ export default function AdminDashboardPage() {
         toast.error(result.error || 'Failed to approve member');
       } else {
         toast.success('Member approved! Account activated.');
-        fetchData('members');
+        if (viewingDetailItem && viewingDetailItem.id === memberId) {
+          setViewingDetailItem(null);
+        }
+        fetchData(activeTab);
       }
     } catch (err: any) {
       console.error('Approval error:', err);
       toast.error(`Failed to approve member: ${err?.message || 'Server error'}`);
     } finally {
       setApprovingId(null);
+    }
+  };
+
+  // Reject a pending member request
+  const handleRejectMember = async (memberId: string) => {
+    if (!window.confirm('Reject this member request? They will not become a registered member.')) return;
+
+    try {
+      await auth.currentUser?.getIdToken(true);
+      await updateDoc(doc(db, 'members', memberId), {
+        status: 'rejected',
+        rejectedAt: new Date().toISOString(),
+        rejectedBy: user?.email || 'admin'
+      });
+      toast.success('Member request rejected.');
+      if (viewingDetailItem && viewingDetailItem.id === memberId) {
+        setViewingDetailItem(null);
+      }
+      fetchData(activeTab);
+    } catch (err: any) {
+      console.error('Reject member error:', err);
+      toast.error(`Failed to reject member: ${err?.message || 'Permission denied'}`);
     }
   };
 
@@ -735,8 +788,17 @@ export default function AdminDashboardPage() {
       setFormData({ title: '', description: '', techStack: '', githubLink: '', liveLink: '', image: '', contributors: '', status: 'approved' });
     } else if (activeTab === 'blogs') {
       setFormData({ title: '', author: '', date: new Date().toISOString().split('T')[0], tags: '', readTime: '', thumbnail: '', excerpt: '', content: '', slug: '', status: 'approved' });
-    } else if (activeTab === 'members') {
-      setFormData({ name: '', email: '', registrationNumber: '', bio: '', github: '', linkedin: '', image: '', status: 'pending' });
+    } else if (activeTab === 'members' || activeTab === 'registeredMembers') {
+      setFormData({
+        name: '',
+        email: '',
+        registrationNumber: '',
+        bio: '',
+        github: '',
+        linkedin: '',
+        image: '',
+        status: activeTab === 'registeredMembers' ? 'approved' : 'pending'
+      });
     } else if (activeTab === 'leaderboard') {
       setFormData({ name: '', codeforcesRating: 1200, leetcodeProblems: 100, codechefStars: 3, totalScore: 1500 });
     }
@@ -780,7 +842,7 @@ export default function AdminDashboardPage() {
         slug: item.slug || '',
         status: item.status || 'pending'
       });
-    } else if (activeTab === 'members') {
+    } else if (activeTab === 'members' || activeTab === 'registeredMembers') {
       setFormData({
         name: item.name || '',
         email: item.email || '',
@@ -789,7 +851,7 @@ export default function AdminDashboardPage() {
         github: item.github || '',
         linkedin: item.linkedin || '',
         image: item.image || '',
-        status: item.status || 'pending'
+        status: item.status || (activeTab === 'registeredMembers' ? 'approved' : 'pending')
       });
     } else if (activeTab === 'leaderboard') {
       setFormData({
@@ -818,10 +880,11 @@ export default function AdminDashboardPage() {
         if (!submitData.slug) {
           submitData.slug = formData.title.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '');
         }
-      } else if (activeTab === 'members') {
+      } else if (activeTab === 'members' || activeTab === 'registeredMembers') {
         submitData.registrationNumber = (formData.registrationNumber || '').trim().toUpperCase();
         submitData.email = (formData.email || '').trim().toLowerCase();
         submitData.name = (formData.name || '').trim();
+        submitData.status = formData.status || (activeTab === 'registeredMembers' ? 'approved' : 'pending');
 
         // Check if registrationNumber is unique
         if (submitData.registrationNumber) {
@@ -841,9 +904,11 @@ export default function AdminDashboardPage() {
         submitData.totalScore = Number(formData.totalScore);
       }
 
+      const targetCollection = activeTab === 'registeredMembers' ? 'members' : activeTab;
+
       if (editingItem) {
-        await updateDoc(doc(db, activeTab, editingItem.id), { ...submitData, updatedAt: new Date().toISOString() });
-        if (activeTab === 'members') {
+        await updateDoc(doc(db, targetCollection, editingItem.id), { ...submitData, updatedAt: new Date().toISOString() });
+        if (activeTab === 'members' || activeTab === 'registeredMembers') {
           try {
             await setDoc(doc(db, 'memberProfiles', editingItem.id), {
               name: submitData.name,
@@ -861,8 +926,8 @@ export default function AdminDashboardPage() {
         }
         toast.success('Updated successfully!');
       } else {
-        const newRef = await addDoc(collection(db, activeTab), { ...submitData, createdAt: new Date().toISOString() });
-        if (activeTab === 'members' && (submitData.status === 'approved' || !submitData.status)) {
+        const newRef = await addDoc(collection(db, targetCollection), { ...submitData, createdAt: new Date().toISOString() });
+        if ((activeTab === 'members' || activeTab === 'registeredMembers') && (submitData.status === 'approved' || !submitData.status)) {
           try {
             await setDoc(doc(db, 'memberProfiles', newRef.id), {
               name: submitData.name,
@@ -900,6 +965,7 @@ export default function AdminDashboardPage() {
     { id: 'projects', label: 'Projects', icon: <FaProjectDiagram /> },
     { id: 'blogs', label: 'Blog Posts', icon: <FaPenNib /> },
     { id: 'members', label: 'Members', icon: <FaUsers /> },
+    { id: 'registeredMembers', label: 'Registered Members', icon: <FaIdCard /> },
     { id: 'profileUpdateRequests', label: 'Profile Updates', icon: <FaUserCheck /> },
     { id: 'leaderboard', label: 'Leaderboard', icon: <FaTrophy /> },
     { id: 'contacts', label: 'Messages', icon: <FaEnvelope /> },
@@ -920,7 +986,7 @@ export default function AdminDashboardPage() {
               key={tab.id}
               onClick={() => fetchData(tab.id)}
               style={{
-                display: 'flex', alignItems: 'center', gap: '12px',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 padding: '12px 16px', borderRadius: '12px',
                 border: 'none', cursor: 'pointer', textAlign: 'left',
                 background: activeTab === tab.id ? 'var(--accent-glow)' : 'transparent',
@@ -929,7 +995,24 @@ export default function AdminDashboardPage() {
                 transition: 'all 0.2s'
               }}
             >
-              {tab.icon} {tab.label}
+              <span style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                {tab.icon} {tab.label}
+              </span>
+              {tab.id === 'members' && pendingMembersCount > 0 && (
+                <span
+                  style={{
+                    background: 'var(--accent)',
+                    color: '#000',
+                    padding: '2px 8px',
+                    borderRadius: '10px',
+                    fontSize: '0.72rem',
+                    fontWeight: 700
+                  }}
+                  title={`${pendingMembersCount} pending membership verification request${pendingMembersCount > 1 ? 's' : ''}`}
+                >
+                  {pendingMembersCount}
+                </span>
+              )}
             </button>
           ))}
         </nav>
@@ -949,12 +1032,18 @@ export default function AdminDashboardPage() {
 
       {/* Main Content */}
       <div style={{ flexGrow: 1, padding: '40px', overflowY: 'auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
-          <h1 style={{ fontSize: '2.5rem', fontWeight: 800, textTransform: 'capitalize' }}>
-            {activeTab === 'profileUpdateRequests' ? 'Member Profile Updates' : `Manage ${activeTab}`}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: (activeTab === 'members' || activeTab === 'registeredMembers') ? '12px' : '32px' }}>
+          <h1 style={{ fontSize: '2.5rem', fontWeight: 800 }}>
+            {activeTab === 'profileUpdateRequests'
+              ? 'Member Profile Updates'
+              : activeTab === 'members'
+              ? 'Manage Members'
+              : activeTab === 'registeredMembers'
+              ? 'Registered Members'
+              : `Manage ${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}`}
           </h1>
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-            {(activeTab === 'members' || activeTab === 'leaderboard') && (
+            {(activeTab === 'members' || activeTab === 'registeredMembers' || activeTab === 'leaderboard') && (
               <button
                 className="btn-outline"
                 style={{ padding: '9px 16px', borderRadius: '8px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px' }}
@@ -972,6 +1061,17 @@ export default function AdminDashboardPage() {
             )}
           </div>
         </div>
+
+        {activeTab === 'members' && (
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '24px' }}>
+            Pending requests to join waiting for verification. Once approved, members are added to <strong>Registered Members</strong> and their accounts activated. Rejected requests are also dismissed from this view.
+          </p>
+        )}
+        {activeTab === 'registeredMembers' && (
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '24px' }}>
+            Verified DevNest members with active accounts, complete profiles, and public records.
+          </p>
+        )}
 
         {activeTab === 'projects' && (
           <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
@@ -1017,6 +1117,357 @@ export default function AdminDashboardPage() {
         )}
 
         {(() => {
+          if (activeTab === 'registeredMembers') {
+            const filteredRegisteredMembers = data.filter((m: any) => {
+              if (!searchMemberQuery.trim()) return true;
+              const q = searchMemberQuery.toLowerCase();
+              return (
+                (m.name || '').toLowerCase().includes(q) ||
+                (m.registrationNumber || '').toLowerCase().includes(q) ||
+                (m.email || '').toLowerCase().includes(q)
+              );
+            });
+
+            return (
+              <div>
+                {/* Search & Statistics Bar */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', gap: '16px', flexWrap: 'wrap' }}>
+                  <div style={{ position: 'relative', flexGrow: 1, maxWidth: '420px' }}>
+                    <FaSearch style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
+                    <input
+                      type="text"
+                      placeholder="Search by name, reg no, email..."
+                      value={searchMemberQuery}
+                      onChange={(e) => setSearchMemberQuery(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '11px 14px 11px 40px',
+                        borderRadius: '10px',
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border)',
+                        color: 'var(--text-primary)',
+                        fontSize: '0.9rem',
+                        outline: 'none'
+                      }}
+                    />
+                  </div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', background: 'var(--bg-card)', border: '1px solid var(--border)', padding: '8px 16px', borderRadius: '10px' }}>
+                    Total Registered Members: <strong style={{ color: 'var(--accent)' }}>{filteredRegisteredMembers.length}</strong>
+                  </div>
+                </div>
+
+                {dataLoading ? (
+                  <div style={{ background: 'var(--bg-card)', borderRadius: '16px', border: '1px solid var(--border)', padding: '60px 40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    Loading registered members...
+                  </div>
+                ) : filteredRegisteredMembers.length === 0 ? (
+                  <div style={{ background: 'var(--bg-card)', borderRadius: '16px', border: '1px solid var(--border)', padding: '60px 40px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '3rem', color: 'var(--border-light)', marginBottom: '16px' }}>
+                      <FaIdCard />
+                    </div>
+                    <h3 style={{ fontSize: '1.2rem', color: 'var(--text-primary)', marginBottom: '8px' }}>No registered members found</h3>
+                    <p style={{ color: 'var(--text-muted)' }}>
+                      {searchMemberQuery ? 'No members match your search criteria.' : 'Approved members will appear here once verified.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))',
+                    gap: '24px'
+                  }}>
+                    {filteredRegisteredMembers.map((member) => (
+                      <div
+                        key={member.id}
+                        style={{
+                          background: 'var(--bg-card)',
+                          border: '1px solid var(--border)',
+                          borderRadius: '16px',
+                          padding: '24px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '16px',
+                          position: 'relative',
+                          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25)',
+                          transition: 'all 0.2s ease'
+                        }}
+                        className="hover-glow"
+                      >
+                        {/* Top Action Buttons (Edit / Delete) */}
+                        <div style={{ position: 'absolute', top: '16px', right: '16px', display: 'flex', gap: '6px', zIndex: 2 }}>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditModal(member)}
+                            style={{
+                              background: 'var(--bg-secondary)',
+                              border: '1px solid var(--border)',
+                              color: 'var(--info)',
+                              borderRadius: '8px',
+                              padding: '7px 9px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'all 0.2s'
+                            }}
+                            title="Edit Member"
+                          >
+                            <FaEdit size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => confirmDelete(member.id, member.name || 'this member', 'members')}
+                            style={{
+                              background: 'var(--bg-secondary)',
+                              border: '1px solid var(--border)',
+                              color: 'var(--danger)',
+                              borderRadius: '8px',
+                              padding: '7px 9px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'all 0.2s'
+                            }}
+                            title="Delete Member"
+                          >
+                            <FaTrash size={13} />
+                          </button>
+                        </div>
+
+                        {/* Profile Header: Picture, Full Name, Reg No, Status */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', paddingRight: '70px' }}>
+                          <div style={{
+                            width: '74px',
+                            height: '74px',
+                            borderRadius: '50%',
+                            overflow: 'hidden',
+                            background: 'var(--bg-secondary)',
+                            border: '2px solid var(--accent)',
+                            boxShadow: '0 0 12px var(--accent-glow)',
+                            flexShrink: 0
+                          }}>
+                            <img
+                              src={member.image || '/placeholder-avatar.png'}
+                              alt={member.name || 'Member'}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 100 100"><rect fill="%231e293b" width="100" height="100"/><text fill="%2300ff88" x="50" y="50" font-family="sans-serif" font-size="28" font-weight="bold" text-anchor="middle" alignment-baseline="central">' + ((member.name || 'M').charAt(0).toUpperCase()) + '</text></svg>';
+                              }}
+                            />
+                          </div>
+
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                              <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0, wordBreak: 'break-word' }}>
+                                {member.name || 'Unnamed Member'}
+                              </h3>
+                              <span className="badge badge-green" style={{ fontSize: '0.7rem', padding: '2px 8px' }}>
+                                Approved
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 600 }}>REG NO:</span>
+                              <span style={{
+                                fontFamily: 'monospace',
+                                fontWeight: 700,
+                                color: 'var(--accent)',
+                                background: 'rgba(0, 255, 136, 0.1)',
+                                padding: '2px 8px',
+                                borderRadius: '6px',
+                                fontSize: '0.82rem',
+                                border: '1px solid rgba(0, 255, 136, 0.25)'
+                              }}>
+                                {member.registrationNumber || 'N/A'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Email */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.85rem', background: 'var(--bg-secondary)', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border-light)' }}>
+                          <FaEnvelope style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                          <span style={{ color: 'var(--text-dim)', fontSize: '0.78rem', width: '42px', flexShrink: 0, fontWeight: 600 }}>Email:</span>
+                          <a
+                            href={`mailto:${member.email}`}
+                            style={{
+                              color: 'var(--text-primary)',
+                              textDecoration: 'none',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              flex: 1,
+                              fontSize: '0.84rem'
+                            }}
+                            title={member.email}
+                          >
+                            {member.email || '—'}
+                          </a>
+                          {member.email && (
+                            <button
+                              type="button"
+                              onClick={() => { navigator.clipboard.writeText(member.email); toast.success('Email copied to clipboard!'); }}
+                              style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0, flexShrink: 0 }}
+                              title="Copy Email"
+                            >
+                              <FaCopy size={12} />
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Profile Image URL */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.85rem', background: 'var(--bg-secondary)', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border-light)' }}>
+                          <FaExternalLinkAlt style={{ color: 'var(--accent)', flexShrink: 0, fontSize: '0.78rem' }} />
+                          <span style={{ color: 'var(--text-dim)', fontSize: '0.78rem', width: '42px', flexShrink: 0, fontWeight: 600 }}>Image:</span>
+                          {member.image ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+                              <a
+                                href={member.image}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  color: 'var(--accent)',
+                                  fontSize: '0.8rem',
+                                  textDecoration: 'underline',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  flex: 1
+                                }}
+                                title={member.image}
+                              >
+                                {member.image}
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => { navigator.clipboard.writeText(member.image); toast.success('Image URL copied!'); }}
+                                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0, flexShrink: 0 }}
+                                title="Copy Profile Image URL"
+                              >
+                                <FaCopy size={12} />
+                              </button>
+                            </div>
+                          ) : (
+                            <span style={{ color: 'var(--text-dim)', fontSize: '0.8rem', fontStyle: 'italic' }}>Default avatar</span>
+                          )}
+                        </div>
+
+                        {/* Bio */}
+                        <div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: '4px', fontWeight: 600, textTransform: 'uppercase' }}>Bio:</div>
+                          <div style={{
+                            fontSize: '0.84rem',
+                            color: member.bio ? 'var(--text-secondary)' : 'var(--text-dim)',
+                            lineHeight: 1.5,
+                            background: 'var(--bg-secondary)',
+                            padding: '10px 12px',
+                            borderRadius: '8px',
+                            border: '1px solid var(--border-light)',
+                            minHeight: '48px',
+                            maxHeight: '80px',
+                            overflowY: 'auto'
+                          }}>
+                            {member.bio || <span style={{ fontStyle: 'italic' }}>No bio provided.</span>}
+                          </div>
+                        </div>
+
+                        {/* GitHub URL & LinkedIn URL */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                          {/* GitHub */}
+                          <div style={{
+                            background: 'var(--bg-secondary)',
+                            padding: '8px 10px',
+                            borderRadius: '8px',
+                            border: '1px solid var(--border-light)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '2px',
+                            minWidth: 0
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-dim)', fontSize: '0.72rem', fontWeight: 600 }}>
+                              <FaGithub /> GitHub URL:
+                            </div>
+                            {member.github ? (
+                              <a
+                                href={member.github}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  color: 'var(--accent)',
+                                  fontSize: '0.78rem',
+                                  textDecoration: 'underline',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap'
+                                }}
+                                title={member.github}
+                              >
+                                {member.github.replace(/^https?:\/\/(www\.)?github\.com\/?/, '@') || member.github}
+                              </a>
+                            ) : (
+                              <span style={{ color: 'var(--text-dim)', fontSize: '0.75rem', fontStyle: 'italic' }}>Not provided</span>
+                            )}
+                          </div>
+
+                          {/* LinkedIn */}
+                          <div style={{
+                            background: 'var(--bg-secondary)',
+                            padding: '8px 10px',
+                            borderRadius: '8px',
+                            border: '1px solid var(--border-light)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '2px',
+                            minWidth: 0
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-dim)', fontSize: '0.72rem', fontWeight: 600 }}>
+                              <FaLinkedin style={{ color: '#0a66c2' }} /> LinkedIn URL:
+                            </div>
+                            {member.linkedin ? (
+                              <a
+                                href={member.linkedin}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  color: '#38bdf8',
+                                  fontSize: '0.78rem',
+                                  textDecoration: 'underline',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap'
+                                }}
+                                title={member.linkedin}
+                              >
+                                {member.linkedin.replace(/^https?:\/\/(www\.)?linkedin\.com\/in\/?/, 'in/') || member.linkedin}
+                              </a>
+                            ) : (
+                              <span style={{ color: 'var(--text-dim)', fontSize: '0.75rem', fontStyle: 'italic' }}>Not provided</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Footer with points & registration stats */}
+                        <div style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          paddingTop: '10px',
+                          marginTop: 'auto',
+                          borderTop: '1px solid var(--border-light)',
+                          fontSize: '0.78rem',
+                          color: 'var(--text-dim)'
+                        }}>
+                          <span>Month: <strong style={{ color: 'var(--accent)' }}>{(member.currentMonthPoints || 0).toLocaleString()} XP</strong></span>
+                          <span>Total: <strong style={{ color: 'var(--text-primary)' }}>{(member.totalPoints || 0).toLocaleString()} XP</strong></span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          }
+
           const displayedData = activeTab === 'projects' && projectStatusFilter !== 'all'
             ? data.filter((d: any) => (d.status || 'pending') === projectStatusFilter)
             : data;
@@ -1044,6 +1495,7 @@ export default function AdminDashboardPage() {
                         {activeTab === 'members' && <th style={{ padding: '16px 24px' }}>Reg No</th>}
                         {activeTab === 'members' && <th style={{ padding: '16px 24px' }}>Email</th>}
                         {activeTab === 'members' && <th style={{ padding: '16px 24px' }}>Status</th>}
+                        {activeTab === 'members' && <th style={{ padding: '16px 24px' }}>Application</th>}
                         {activeTab === 'profileUpdateRequests' && <th style={{ padding: '16px 24px' }}>Reg No</th>}
                         {activeTab === 'profileUpdateRequests' && <th style={{ padding: '16px 24px' }}>Requested Changes</th>}
                         {activeTab === 'profileUpdateRequests' && <th style={{ padding: '16px 24px' }}>Submitted</th>}
@@ -1060,19 +1512,52 @@ export default function AdminDashboardPage() {
                       {displayedData.map((item) => (
                         <tr key={item.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
                           <td style={{ padding: '16px 24px', fontWeight: 500 }}>
-                            {item.title || item.name || item.memberName || item.subject || 'Unknown'}
-                            {activeTab === 'profileUpdateRequests' && item.memberEmail && (
-                              <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 400 }}>{item.memberEmail}</div>
-                            )}
-                            {activeTab === 'projects' && (item.submittedByEmail || item.submittedByName) && (
-                              <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 400, marginTop: '2px' }}>
-                                Submitter: {item.submittedByName || ''} {item.submittedByEmail ? `<${item.submittedByEmail}>` : ''}
+                            {activeTab === 'members' ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <div style={{
+                                  width: '38px',
+                                  height: '38px',
+                                  borderRadius: '50%',
+                                  overflow: 'hidden',
+                                  background: 'var(--bg-secondary)',
+                                  border: '1px solid var(--accent)',
+                                  flexShrink: 0
+                                }}>
+                                  <img
+                                    src={item.image || '/placeholder-avatar.png'}
+                                    alt={item.name || 'Member'}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                    onError={(e) => {
+                                      (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 100 100"><rect fill="%231e293b" width="100" height="100"/><text fill="%2300ff88" x="50" y="50" font-family="sans-serif" font-size="28" font-weight="bold" text-anchor="middle" alignment-baseline="central">' + ((item.name || 'M').charAt(0).toUpperCase()) + '</text></svg>';
+                                    }}
+                                  />
+                                </div>
+                                <div>
+                                  <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{item.name || 'Unknown'}</div>
+                                  {item.createdAt && (
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 400 }}>
+                                      Applied: {new Date(item.createdAt).toLocaleDateString()}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                            )}
-                            {activeTab === 'blogs' && (item.author || item.readTime) && (
-                              <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 400, marginTop: '2px' }}>
-                                By {item.author || 'Anonymous'}{item.readTime ? ` • ${item.readTime}` : ''}
-                              </div>
+                            ) : (
+                              <>
+                                {item.title || item.name || item.memberName || item.subject || 'Unknown'}
+                                {activeTab === 'profileUpdateRequests' && item.memberEmail && (
+                                  <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 400 }}>{item.memberEmail}</div>
+                                )}
+                                {activeTab === 'projects' && (item.submittedByEmail || item.submittedByName) && (
+                                  <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 400, marginTop: '2px' }}>
+                                    Submitter: {item.submittedByName || ''} {item.submittedByEmail ? `<${item.submittedByEmail}>` : ''}
+                                  </div>
+                                )}
+                                {activeTab === 'blogs' && (item.author || item.readTime) && (
+                                  <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 400, marginTop: '2px' }}>
+                                    By {item.author || 'Anonymous'}{item.readTime ? ` • ${item.readTime}` : ''}
+                                  </div>
+                                )}
+                              </>
                             )}
                           </td>
                           {activeTab === 'events' && <td style={{ padding: '16px 24px', color: 'var(--text-muted)' }}>{item.date}</td>}
@@ -1305,7 +1790,37 @@ export default function AdminDashboardPage() {
                             </td>
                           )}
                           {activeTab === 'members' && <td style={{ padding: '16px 24px', color: 'var(--text-muted)' }}>{item.email}</td>}
-                          {activeTab === 'members' && <td style={{ padding: '16px 24px' }}><span className={item.status === 'approved' ? 'badge badge-green' : 'badge badge-yellow'}>{item.status || 'pending'}</span></td>}
+                          {activeTab === 'members' && (
+                            <td style={{ padding: '16px 24px' }}>
+                              <span className="badge badge-yellow">
+                                ⏳ Pending Verification
+                              </span>
+                            </td>
+                          )}
+                          {activeTab === 'members' && (
+                            <td style={{ padding: '16px 24px' }}>
+                              <button
+                                type="button"
+                                onClick={() => setViewingDetailItem({ ...item, title: `Member Application: ${item.name}`, _type: 'members' })}
+                                style={{
+                                  background: 'var(--accent-glow)',
+                                  border: '1px solid var(--accent)',
+                                  color: 'var(--accent)',
+                                  padding: '5px 12px',
+                                  borderRadius: '6px',
+                                  fontSize: '0.78rem',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '6px',
+                                  fontWeight: 600
+                                }}
+                                title="Inspect applicant profile, bio & links"
+                              >
+                                <FaEye /> View Details ↗
+                              </button>
+                            </td>
+                          )}
                       
                       {/* Profile Updates specific cells */}
                       {activeTab === 'profileUpdateRequests' && (
@@ -1478,15 +1993,50 @@ export default function AdminDashboardPage() {
                               <FaCheckCircle />
                             </button>
                           )}
-                          {activeTab === 'members' && item.status !== 'approved' && (
-                            <button
-                              onClick={() => handleApproveMember(item.id)}
-                              disabled={approvingId === item.id}
-                              style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', marginRight: '16px', fontSize: '1.1rem' }}
-                              title="Approve Member"
-                            >
-                              <FaUserCheck /> {approvingId === item.id ? 'Approving...' : ''}
-                            </button>
+                          {activeTab === 'members' && (
+                            <>
+                              <button
+                                onClick={() => handleApproveMember(item.id)}
+                                disabled={approvingId === item.id}
+                                style={{
+                                  background: 'rgba(0, 255, 136, 0.15)',
+                                  border: '1px solid var(--accent)',
+                                  color: 'var(--accent)',
+                                  padding: '6px 12px',
+                                  borderRadius: '8px',
+                                  cursor: 'pointer',
+                                  fontWeight: 600,
+                                  fontSize: '0.8rem',
+                                  marginRight: '8px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}
+                                title="Approve Member (activates account and moves to Registered Members)"
+                              >
+                                <FaCheckCircle /> {approvingId === item.id ? 'Approving...' : 'Approve'}
+                              </button>
+                              <button
+                                onClick={() => handleRejectMember(item.id)}
+                                style={{
+                                  background: 'rgba(239, 68, 68, 0.15)',
+                                  border: '1px solid var(--danger)',
+                                  color: 'var(--danger)',
+                                  padding: '6px 12px',
+                                  borderRadius: '8px',
+                                  cursor: 'pointer',
+                                  fontWeight: 600,
+                                  fontSize: '0.8rem',
+                                  marginRight: '8px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}
+                                title="Reject Member Request"
+                              >
+                                <FaTimes /> Reject
+                              </button>
+                            </>
                           )}
                           {activeTab === 'profileUpdateRequests' && item.status === 'pending' && (
                             <>
@@ -1560,9 +2110,15 @@ export default function AdminDashboardPage() {
               <div style={{ fontSize: '3rem', color: 'var(--border-light)', marginBottom: '16px' }}>
                 {tabs.find(t => t.id === activeTab)?.icon}
               </div>
-              <h3 style={{ fontSize: '1.2rem', color: 'var(--text-primary)', marginBottom: '8px' }}>No documents found</h3>
+              <h3 style={{ fontSize: '1.2rem', color: 'var(--text-primary)', marginBottom: '8px' }}>
+                {activeTab === 'members' ? 'No pending membership requests' : 'No documents found'}
+              </h3>
               <p style={{ color: 'var(--text-muted)' }}>
-                {activeTab === 'profileUpdateRequests' ? 'No profile update requests at this time.' : `Get started by adding a new ${activeTab.slice(0, -1)}.`}
+                {activeTab === 'members'
+                  ? 'All membership requests have been processed. Approved members are available in Registered Members.'
+                  : activeTab === 'profileUpdateRequests'
+                  ? 'No profile update requests at this time.'
+                  : `Get started by adding a new ${activeTab.slice(0, -1)}.`}
               </p>
             </div>
           )}
@@ -1606,7 +2162,7 @@ export default function AdminDashboardPage() {
       </Modal>
 
       {/* Admin Add/Edit Modal */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={`${editingItem ? 'Edit' : 'Add'} ${activeTab.slice(0, -1)}`}>
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={`${editingItem ? 'Edit' : 'Add'} ${activeTab === 'registeredMembers' ? 'Registered Member' : activeTab === 'members' ? 'Member Request' : activeTab.slice(0, -1)}`}>
         <form onSubmit={handleFormSubmit}>
           {/* EVENTS FORM */}
           {activeTab === 'events' && (
@@ -1739,8 +2295,8 @@ export default function AdminDashboardPage() {
             </>
           )}
 
-          {/* MEMBERS FORM */}
-          {activeTab === 'members' && (
+          {/* MEMBERS & REGISTERED MEMBERS FORM */}
+          {(activeTab === 'members' || activeTab === 'registeredMembers') && (
             <>
               <div className="form-group">
                 <label className="form-label">Full Name *</label>
@@ -1756,22 +2312,32 @@ export default function AdminDashboardPage() {
               </div>
               <div className="form-group">
                 <label className="form-label">Profile Image URL</label>
-                <input type="url" className="form-input" value={formData.image || ''} onChange={(e) => setFormData({ ...formData, image: e.target.value })} />
+                <input type="url" className="form-input" placeholder="https://..." value={formData.image || ''} onChange={(e) => setFormData({ ...formData, image: e.target.value })} />
               </div>
               <div className="form-group">
                 <label className="form-label">Bio</label>
-                <textarea className="form-input" rows={2} value={formData.bio || ''} onChange={(e) => setFormData({ ...formData, bio: e.target.value })} />
+                <textarea className="form-input" rows={2} placeholder="Brief bio..." value={formData.bio || ''} onChange={(e) => setFormData({ ...formData, bio: e.target.value })} />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div className="form-group">
                   <label className="form-label">GitHub URL</label>
-                  <input type="url" className="form-input" value={formData.github || ''} onChange={(e) => setFormData({ ...formData, github: e.target.value })} />
+                  <input type="url" className="form-input" placeholder="https://github.com/..." value={formData.github || ''} onChange={(e) => setFormData({ ...formData, github: e.target.value })} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">LinkedIn URL</label>
-                  <input type="url" className="form-input" value={formData.linkedin || ''} onChange={(e) => setFormData({ ...formData, linkedin: e.target.value })} />
+                  <input type="url" className="form-input" placeholder="https://linkedin.com/in/..." value={formData.linkedin || ''} onChange={(e) => setFormData({ ...formData, linkedin: e.target.value })} />
                 </div>
               </div>
+              {activeTab === 'members' && (
+                <div className="form-group">
+                  <label className="form-label">Status</label>
+                  <select className="form-input" value={formData.status || 'pending'} onChange={(e) => setFormData({ ...formData, status: e.target.value })}>
+                    <option value="pending">Pending</option>
+                    <option value="approved">Approved</option>
+                    <option value="rejected">Rejected</option>
+                  </select>
+                </div>
+              )}
             </>
           )}
 
@@ -2034,6 +2600,11 @@ export default function AdminDashboardPage() {
             {/* Header Status & Metadata Badges */}
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
               {viewingDetailItem._type === 'projects' && (
+                <span className={viewingDetailItem.status === 'approved' ? 'badge badge-green' : viewingDetailItem.status === 'rejected' ? 'badge badge-red' : 'badge badge-yellow'}>
+                  Status: {viewingDetailItem.status === 'approved' ? 'Approved' : viewingDetailItem.status === 'rejected' ? 'Rejected' : 'Pending Verification'}
+                </span>
+              )}
+              {viewingDetailItem._type === 'members' && (
                 <span className={viewingDetailItem.status === 'approved' ? 'badge badge-green' : viewingDetailItem.status === 'rejected' ? 'badge badge-red' : 'badge badge-yellow'}>
                   Status: {viewingDetailItem.status === 'approved' ? 'Approved' : viewingDetailItem.status === 'rejected' ? 'Rejected' : 'Pending Verification'}
                 </span>
@@ -2421,6 +2992,111 @@ export default function AdminDashboardPage() {
               </div>
             )}
 
+            {/* Member Application Full Details */}
+            {viewingDetailItem._type === 'members' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {/* Photo + Name + Reg No + Email */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '20px', background: 'var(--bg-secondary)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+                  <div style={{
+                    width: '84px',
+                    height: '84px',
+                    borderRadius: '50%',
+                    overflow: 'hidden',
+                    background: 'var(--bg-card)',
+                    border: '2px solid var(--accent)',
+                    boxShadow: '0 0 12px var(--accent-glow)',
+                    flexShrink: 0
+                  }}>
+                    <img
+                      src={viewingDetailItem.image || '/placeholder-avatar.png'}
+                      alt={viewingDetailItem.name || 'Member'}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 100 100"><rect fill="%231e293b" width="100" height="100"/><text fill="%2300ff88" x="50" y="50" font-family="sans-serif" font-size="28" font-weight="bold" text-anchor="middle" alignment-baseline="central">' + ((viewingDetailItem.name || 'M').charAt(0).toUpperCase()) + '</text></svg>';
+                      }}
+                    />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <h3 style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>
+                      {viewingDetailItem.name || 'Unnamed Member'}
+                    </h3>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 600 }}>REG NO:</span>
+                      <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--accent)', background: 'rgba(0, 255, 136, 0.1)', padding: '2px 8px', borderRadius: '4px', fontSize: '0.85rem', border: '1px solid rgba(0, 255, 136, 0.25)' }}>
+                        {viewingDetailItem.registrationNumber || 'N/A'}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                      ✉️ <a href={`mailto:${viewingDetailItem.email}`} style={{ color: 'var(--text-primary)', textDecoration: 'underline' }}>{viewingDetailItem.email}</a>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Profile Image URL */}
+                <div style={{ background: 'var(--bg-secondary)', padding: '12px 16px', borderRadius: '10px', border: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase', marginBottom: '4px' }}>
+                    Profile Image URL:
+                  </div>
+                  {viewingDetailItem.image ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <a href={viewingDetailItem.image} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', fontSize: '0.85rem', textDecoration: 'underline', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                        {viewingDetailItem.image}
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => { navigator.clipboard.writeText(viewingDetailItem.image); toast.success('Image URL copied!'); }}
+                        style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0 }}
+                        title="Copy URL"
+                      >
+                        <FaCopy size={13} />
+                      </button>
+                    </div>
+                  ) : (
+                    <span style={{ color: 'var(--text-dim)', fontSize: '0.85rem', fontStyle: 'italic' }}>No custom image URL provided (default avatar)</span>
+                  )}
+                </div>
+
+                {/* Bio */}
+                <div style={{ background: 'var(--bg-secondary)', padding: '14px 16px', borderRadius: '10px', border: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase', marginBottom: '6px' }}>
+                    Bio:
+                  </div>
+                  <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.6 }}>
+                    {viewingDetailItem.bio || <span style={{ fontStyle: 'italic', color: 'var(--text-dim)' }}>No bio provided.</span>}
+                  </div>
+                </div>
+
+                {/* Social Links */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div style={{ background: 'var(--bg-secondary)', padding: '10px 14px', borderRadius: '10px', border: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 600, marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <FaGithub /> GitHub URL:
+                    </div>
+                    {viewingDetailItem.github ? (
+                      <a href={viewingDetailItem.github} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', fontSize: '0.85rem', textDecoration: 'underline', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }}>
+                        {viewingDetailItem.github}
+                      </a>
+                    ) : (
+                      <span style={{ color: 'var(--text-dim)', fontSize: '0.85rem', fontStyle: 'italic' }}>Not provided</span>
+                    )}
+                  </div>
+
+                  <div style={{ background: 'var(--bg-secondary)', padding: '10px 14px', borderRadius: '10px', border: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 600, marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <FaLinkedin style={{ color: '#0a66c2' }} /> LinkedIn URL:
+                    </div>
+                    {viewingDetailItem.linkedin ? (
+                      <a href={viewingDetailItem.linkedin} target="_blank" rel="noopener noreferrer" style={{ color: '#38bdf8', fontSize: '0.85rem', textDecoration: 'underline', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }}>
+                        {viewingDetailItem.linkedin}
+                      </a>
+                    ) : (
+                      <span style={{ color: 'var(--text-dim)', fontSize: '0.85rem', fontStyle: 'italic' }}>Not provided</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Admin Action Buttons Footer */}
             <div
               style={{
@@ -2520,6 +3196,68 @@ export default function AdminDashboardPage() {
                       }}
                     >
                       <FaEdit /> Edit Article
+                    </button>
+                  </>
+                )}
+                {viewingDetailItem._type === 'members' && (
+                  <>
+                    {viewingDetailItem.status !== 'approved' && (
+                      <button
+                        onClick={() => handleApproveMember(viewingDetailItem.id)}
+                        disabled={approvingId === viewingDetailItem.id}
+                        style={{
+                          background: 'rgba(0, 255, 136, 0.15)',
+                          border: '1px solid var(--accent)',
+                          color: 'var(--accent)',
+                          padding: '8px 16px',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          fontWeight: 600,
+                          fontSize: '0.85rem',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                      >
+                        <FaCheckCircle /> {approvingId === viewingDetailItem.id ? 'Approving...' : 'Approve Member'}
+                      </button>
+                    )}
+                    {viewingDetailItem.status !== 'rejected' && (
+                      <button
+                        onClick={() => handleRejectMember(viewingDetailItem.id)}
+                        style={{
+                          background: 'rgba(239, 68, 68, 0.15)',
+                          border: '1px solid var(--danger)',
+                          color: 'var(--danger)',
+                          padding: '8px 16px',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          fontWeight: 600,
+                          fontSize: '0.85rem',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                      >
+                        <FaTimes /> Reject Request
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        const itemToEdit = { ...viewingDetailItem };
+                        setViewingDetailItem(null);
+                        handleOpenEditModal(itemToEdit);
+                      }}
+                      className="btn-secondary"
+                      style={{
+                        padding: '8px 16px',
+                        fontSize: '0.85rem',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      <FaEdit /> Edit Details
                     </button>
                   </>
                 )}
