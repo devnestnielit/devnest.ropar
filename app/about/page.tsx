@@ -211,7 +211,7 @@ export default function AboutPage() {
             </div>
             <div style={{ flex: 1, textAlign: 'center' }}>
               <h3 style={{ fontSize: '1.5rem', color: 'var(--text-primary)', marginBottom: '4px' }}>Sohit Narayan</h3>
-              <p style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: '1rem', fontSize: '0.9rem' }}>Social Media Executive</p>
+              <p style={{ color: 'var(--accent)', fontWeight: 600, marginBottom: '1rem', fontSize: '0.9rem' }}>Tech Executive</p>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
                 &quot;Empowering student developers to master modern frameworks, scalable systems.&quot;
               </p>
