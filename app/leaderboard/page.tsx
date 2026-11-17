@@ -32,21 +32,17 @@ export default function LeaderboardPage() {
       (snapshot) => {
         const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-        // Include approved member profiles
+        // Include approved member profiles only
         const activeMembers = items.filter((m: any) => m.status === 'approved');
 
-        // Sort descending by currentMonthPoints, tie-break with totalPoints, then name
-        const sorted = activeMembers.sort((a: any, b: any) => {
-          const pointsA = Number(a.currentMonthPoints) || 0;
-          const pointsB = Number(b.currentMonthPoints) || 0;
-          if (pointsB !== pointsA) return pointsB - pointsA;
-
-          const totalA = Number(a.totalPoints) || 0;
-          const totalB = Number(b.totalPoints) || 0;
-          if (totalB !== totalA) return totalB - totalA;
-
-          return (a.name || '').localeCompare(b.name || '');
-        });
+        // Sort descending by currentMonthPoints only, tie-break alphabetically by name
+        const sorted = activeMembers
+          .sort((a: any, b: any) => {
+            const diff = (Number(b.currentMonthPoints) || 0) - (Number(a.currentMonthPoints) || 0);
+            if (diff !== 0) return diff;
+            return (a.name || '').localeCompare(b.name || '');
+          })
+          .slice(0, 10); // Top 10 only
 
         setData(sorted);
         setLoading(false);
